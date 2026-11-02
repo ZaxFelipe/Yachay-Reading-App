@@ -4,7 +4,7 @@ import android.net.Uri
 import com.yachay.app.data.db.BookEntity
 import com.yachay.app.data.importer.ReadiumServices
 import com.yachay.app.data.settings.SettingsRepository
-import com.yachay.app.domain.ReadingTheme
+import com.yachay.app.domain.ReaderPreferences
 import org.json.JSONObject
 import org.readium.r2.shared.publication.Locator
 import org.readium.r2.shared.publication.Publication
@@ -27,8 +27,8 @@ class EpubSessions(
         val title: String,
         val publication: Publication,
         val initialLocator: Locator?,
-        /** Tema lido ao abrir: o navegador precisa dele antes de a activity existir. */
-        val initialTheme: ReadingTheme,
+        /** Tema/fonte lidos ao abrir: o navegador precisa deles antes de a activity existir. */
+        val initialPreferences: ReaderPreferences,
     )
 
     private val sessions = ConcurrentHashMap<Long, Session>()
@@ -39,7 +39,7 @@ class EpubSessions(
         val locator = book.lastPosition?.let { json ->
             runCatching { Locator.fromJSON(JSONObject(json)) }.getOrNull()
         }
-        sessions[book.id] = Session(book.id, book.title, publication, locator, settings.currentReadingTheme())
+        sessions[book.id] = Session(book.id, book.title, publication, locator, settings.currentReaderPreferences())
         return true
     }
 

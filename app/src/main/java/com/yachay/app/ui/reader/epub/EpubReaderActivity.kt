@@ -8,7 +8,19 @@ import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import com.yachay.app.ui.components.NeoPressable
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.res.stringResource
@@ -39,9 +51,6 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 import org.readium.r2.navigator.epub.EpubNavigatorFactory
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
-import org.readium.r2.navigator.epub.EpubPreferences
-import org.readium.r2.navigator.preferences.Color as ReadiumColor
-import org.readium.r2.navigator.preferences.Theme
 import org.readium.r2.navigator.util.DirectionalNavigationAdapter
 import org.readium.r2.shared.ExperimentalReadiumApi
 import org.readium.r2.shared.publication.Locator
@@ -71,7 +80,7 @@ class EpubReaderActivity : AppCompatActivity() {
         supportFragmentManager.fragmentFactory = EpubNavigatorFactory(session.publication)
             .createFragmentFactory(
                 initialLocator = session.initialLocator,
-                initialPreferences = session.initialTheme.epubPreferences(),
+                initialPreferences = session.initialPreferences.toEpubPreferences(),
             )
 
         super.onCreate(savedInstanceState)
@@ -79,7 +88,7 @@ class EpubReaderActivity : AppCompatActivity() {
         setContentView(R.layout.activity_epub_reader)
 
         val root = findViewById<View>(R.id.reader_root)
-        root.setBackgroundColor(session.initialTheme.colors().page.toArgb())
+        root.setBackgroundColor(session.initialPreferences.theme.colors().page.toArgb())
         val readerContainer = findViewById<FragmentContainerView>(R.id.reader_container)
         ViewCompat.setOnApplyWindowInsetsListener(readerContainer) { view, insets ->
             view.updatePadding(bottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom)
@@ -99,6 +108,9 @@ class EpubReaderActivity : AppCompatActivity() {
         findViewById<ComposeView>(R.id.reader_top_bar).setContent {
             YachayTheme {
                 val value by progress.collectAsStateWithLifecycle()
+                val preferences by container.settings.readerPreferences
+                    .collectAsStateWithLifecycle(initialValue = session.initialPreferences)
+                var showTextSettings by rememberSaveable { mutableStateOf(false) }
                 NeoTopBar(
                     title = session.title,
                     navigationIcon = {
@@ -108,19 +120,33 @@ class EpubReaderActivity : AppCompatActivity() {
                             onClick = ::finish,
                         )
                     },
+                    actions = { TextSettingsButton(onClick = { showTextSettings = true }) },
                     bottom = { NeoProgressBar(progress = value) },
                 )
+                if (showTextSettings) {
+                    val settings = container.settings
+                    // appScope: a escolha é gravada mesmo se o leitor fechar logo em seguida.
+                    ReaderSettingsSheet(
+                        preferences = preferences,
+                        onFontScale = { container.appScope.launch { settings.setFontScale(it) } },
+                        onLineSpacing = { container.appScope.launch { settings.setLineSpacing(it) } },
+                        onTheme = { container.appScope.launch { settings.setReadingTheme(it) } },
+                        onDismiss = { showTextSettings = false },
+                    )
+                }
             }
         }
 
         lifecycleScope.launch {
             container.bookRepository.markOpened(bookId)
         }
-        // Mudou o tema em Ajustes? Aplica na hora (página e faixa sob a barra de navegação).
+        // Mudou tema/fonte (na sheet "Aa" ou em Ajustes)? Aplica na hora; o Readium re-pagina
+        // mantendo o locator atual, e o progresso se recalcula pelo currentLocator.
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                container.settings.readingTheme.collect { theme ->
-                    navigator.submitPreferences(theme.epubPreferences())
+                container.settings.readerPreferences.collect { preferences ->
+                    val theme = preferences.theme
+                    navigator.submitPreferences(preferences.toEpubPreferences())
                     root.setBackgroundColor(theme.colors().page.toArgb())
                     // A barra de navegação fica sobre a página: ícones escuros no papel, claros à noite.
                     WindowCompat.getInsetsController(window, root).isAppearanceLightNavigationBars =
@@ -164,16 +190,6 @@ class EpubReaderActivity : AppCompatActivity() {
         }
     }
 
-    /** Cores do tema de leitura no formato do Readium (o tema LIGHT/DARK cuida dos links e seleção). */
-    private fun ReadingTheme.epubPreferences(): EpubPreferences {
-        val colors = colors()
-        return EpubPreferences(
-            theme = if (this == ReadingTheme.NIGHT) Theme.DARK else Theme.LIGHT,
-            backgroundColor = ReadiumColor(colors.page.toArgb()),
-            textColor = ReadiumColor(colors.text.toArgb()),
-        )
-    }
-
     companion object {
         private const val EXTRA_BOOK_ID = "bookId"
         private const val NAVIGATOR_TAG = "epub_navigator"
@@ -181,5 +197,18 @@ class EpubReaderActivity : AppCompatActivity() {
 
         fun intent(context: Context, bookId: Long): Intent =
             Intent(context, EpubReaderActivity::class.java).putExtra(EXTRA_BOOK_ID, bookId)
+    }
+}
+
+/** "Aa" na barra do leitor: abre tamanho da fonte, entrelinha e tema. */
+@Composable
+private fun TextSettingsButton(onClick: () -> Unit) {
+    val description = stringResource(R.string.reader_text_settings)
+    NeoPressable(onClick = onClick, shadow = 3.dp, modifier = Modifier.semantics { contentDescription = description }) {
+        Text(
+            "Aa",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+        )
     }
 }

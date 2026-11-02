@@ -4,32 +4,58 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.yachay.app.domain.FontScale
+import com.yachay.app.domain.LineSpacing
+import com.yachay.app.domain.ReaderPreferences
 import com.yachay.app.domain.ReadingTheme
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
-private val Context.settingsStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
+val Context.settingsStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
-/** Preferências do usuário (DataStore). Uma instância por processo, via AppContainer. */
-class SettingsRepository(context: Context) {
-
-    private val store = context.settingsStore
+/**
+ * Preferências do usuário (DataStore). Uma instância por processo, via AppContainer.
+ * Recebe o [DataStore] pronto para os testes usarem um arquivo temporário.
+ */
+class SettingsRepository(private val store: DataStore<Preferences>) {
 
     val readingTheme: Flow<ReadingTheme> = store.data
         .map { ReadingTheme.fromName(it[READING_THEME]) }
         .distinctUntilChanged()
 
-    suspend fun currentReadingTheme(): ReadingTheme = readingTheme.first()
+    /** Tudo o que o leitor EPUB aplica junto (um Flow só, reenviado inteiro ao navegador). */
+    val readerPreferences: Flow<ReaderPreferences> = store.data
+        .map {
+            ReaderPreferences(
+                theme = ReadingTheme.fromName(it[READING_THEME]),
+                fontScale = FontScale.sanitize(it[EPUB_FONT_SCALE]),
+                lineSpacing = LineSpacing.fromName(it[EPUB_LINE_SPACING]),
+            )
+        }
+        .distinctUntilChanged()
+
+    suspend fun currentReaderPreferences(): ReaderPreferences = readerPreferences.first()
 
     suspend fun setReadingTheme(theme: ReadingTheme) {
         store.edit { it[READING_THEME] = theme.name }
     }
 
+    suspend fun setFontScale(scale: Float) {
+        store.edit { it[EPUB_FONT_SCALE] = FontScale.sanitize(scale) }
+    }
+
+    suspend fun setLineSpacing(spacing: LineSpacing) {
+        store.edit { it[EPUB_LINE_SPACING] = spacing.name }
+    }
+
     private companion object {
         val READING_THEME = stringPreferencesKey("reading_theme")
+        val EPUB_FONT_SCALE = floatPreferencesKey("epub_font_scale")
+        val EPUB_LINE_SPACING = stringPreferencesKey("epub_line_spacing")
     }
 }

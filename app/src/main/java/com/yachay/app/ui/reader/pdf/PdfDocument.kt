@@ -31,6 +31,15 @@ class PdfDocument private constructor(
 
     val pageCount: Int get() = pageAspectRatios.size
 
+    /**
+     * Maior largura de re-render (zoom) para a página: um bitmap nunca passa de 1/10 do heap,
+     * nem de [PdfZoom.MAX_RENDER_WIDTH_PX]. Evita OutOfMemoryError ampliando 5×.
+     */
+    fun maxRenderWidth(index: Int): Int = minOf(
+        PdfZoom.MAX_RENDER_WIDTH_PX,
+        PdfZoom.memoryCapWidth(Runtime.getRuntime().maxMemory() / 10, pageAspectRatios[index]),
+    )
+
     suspend fun render(index: Int, widthPx: Int): Bitmap? = withContext(Dispatchers.IO) {
         mutex.withLock {
             if (closed) return@withLock null

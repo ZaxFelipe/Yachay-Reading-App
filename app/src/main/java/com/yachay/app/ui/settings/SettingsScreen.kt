@@ -41,7 +41,11 @@ import com.yachay.app.AppContainer
 import com.yachay.app.BuildConfig
 import com.yachay.app.R
 import com.yachay.app.appContainer
+import com.yachay.app.domain.LineSpacing
+import com.yachay.app.domain.ReaderPreferences
 import com.yachay.app.domain.ReadingTheme
+import com.yachay.app.ui.reader.FontScaleStepper
+import com.yachay.app.ui.reader.LineSpacingChips
 import com.yachay.app.ui.components.NeoPressable
 import com.yachay.app.ui.components.NeoTopBar
 import com.yachay.app.ui.components.SectionHeader
@@ -69,9 +73,16 @@ class SettingsViewModel(container: AppContainer) : ViewModel() {
     val readingTheme: StateFlow<ReadingTheme> = settings.readingTheme
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReadingTheme.Default)
 
+    val readerPreferences: StateFlow<ReaderPreferences> = settings.readerPreferences
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReaderPreferences())
+
     fun selectReadingTheme(theme: ReadingTheme) = viewModelScope.launch {
         settings.setReadingTheme(theme)
     }
+
+    fun setFontScale(scale: Float) = viewModelScope.launch { settings.setFontScale(scale) }
+
+    fun setLineSpacing(spacing: LineSpacing) = viewModelScope.launch { settings.setLineSpacing(spacing) }
 }
 
 @Composable
@@ -79,6 +90,7 @@ fun SettingsScreen() {
     val context = LocalContext.current
     val viewModel = viewModel { SettingsViewModel(context.appContainer) }
     val selected by viewModel.readingTheme.collectAsStateWithLifecycle()
+    val reader by viewModel.readerPreferences.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = Night,
@@ -119,6 +131,27 @@ fun SettingsScreen() {
                     )
                 }
             }
+
+            // Mesma preferência da sheet "Aa" do leitor EPUB.
+            SectionHeader(stringResource(R.string.settings_reading_text), modifier = Modifier.padding(top = 20.dp))
+            Text(
+                stringResource(R.string.settings_reading_text_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = LocalContentColor.current.copy(alpha = 0.72f),
+            )
+            Text(stringResource(R.string.reader_font_size), style = MaterialTheme.typography.titleMedium)
+            FontScaleStepper(reader.fontScale, viewModel::setFontScale)
+            Text(
+                stringResource(R.string.reader_line_spacing),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            LineSpacingChips(reader.lineSpacing, viewModel::setLineSpacing)
+            Text(
+                stringResource(R.string.reader_line_spacing_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = LocalContentColor.current.copy(alpha = 0.72f),
+            )
         }
     }
 }

@@ -49,8 +49,19 @@ interface BookDao {
     @Query("UPDATE books SET coverPath = :coverPath WHERE id = :id")
     suspend fun updateCover(id: Long, coverPath: String?)
 
-    @Query("UPDATE books SET progress = :progress, lastPosition = :position WHERE id = :id")
+    /**
+     * `progress` guarda o ponto mais longe lido (nunca diminui aqui); `lastPosition` é a posição
+     * atual, para retomar. Numa query só para não haver corrida entre ler e gravar.
+     */
+    @Query("UPDATE books SET progress = MAX(progress, :progress), lastPosition = :position WHERE id = :id")
     suspend fun updateProgress(id: Long, progress: Float, position: String?)
+
+    @Query("UPDATE books SET progress = 1 WHERE id = :id")
+    suspend fun markRead(id: Long)
+
+    /** Volta o livro a "Novo": sem progresso, sem posição e fora de "Continuar lendo". */
+    @Query("UPDATE books SET progress = 0, lastPosition = NULL, lastOpenedAt = NULL WHERE id = :id")
+    suspend fun markUnread(id: Long)
 
     @Query("UPDATE books SET lastOpenedAt = :timestamp WHERE id = :id")
     suspend fun markOpened(id: Long, timestamp: Long)

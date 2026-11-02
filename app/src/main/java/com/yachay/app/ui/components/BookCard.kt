@@ -58,6 +58,7 @@ import com.yachay.app.ui.theme.neoBorder
 import com.yachay.app.ui.theme.placeholderColorFor
 import com.yachay.app.ui.theme.tabular
 import java.io.File
+import org.json.JSONObject
 
 /** Livro aberto alguma vez e ainda não concluído. */
 val BookEntity.isReading: Boolean get() = lastOpenedAt != null && !ReadingProgress.isDone(progress)
@@ -200,21 +201,49 @@ private fun formatMeta(book: BookEntity): String {
     }
 }
 
-/** "Página 13 de 30 · faltam 17" (PDF) ou "7% lido" (EPUB): onde o leitor parou, em palavras. */
+/**
+ * "Página 13 de 30 · faltam 17" (PDF) ou "Em 40% do livro" (EPUB): onde o leitor parou, em
+ * palavras. Se ele voltou para trás, acrescenta "· lido até 50%" — a barra mostra o máximo lido.
+ */
 @Composable
 fun positionLabel(book: BookEntity): String {
     val pages = book.totalPages
     val page = book.lastPosition?.toIntOrNull()
-    return if (book.format == BookFormat.PDF && pages != null && page != null) {
-        val current = page + 1
-        val left = pages - current
+    val current = currentFraction(book)
+    val base = if (book.format == BookFormat.PDF && pages != null && page != null) {
+        val number = page + 1
+        val left = pages - number
         if (left > 0) {
-            stringResource(R.string.book_position_pdf, current, pages, left)
+            stringResource(R.string.book_position_pdf, number, pages, left)
         } else {
-            stringResource(R.string.book_position_pdf_last, current, pages)
+            stringResource(R.string.book_position_pdf_last, number, pages)
         }
+    } else if (current != null) {
+        stringResource(R.string.book_position_epub, ReadingProgress.percent(current))
     } else {
         stringResource(R.string.book_position_percent, ReadingProgress.percent(book.progress))
+    }
+    val furthest = ReadingProgress.percent(book.progress)
+    return if (current != null && furthest > ReadingProgress.percent(current)) {
+        stringResource(R.string.book_position_furthest, base, furthest)
+    } else {
+        base
+    }
+}
+
+/** Posição atual como fração: página salva (PDF) ou `totalProgression` do Locator (EPUB). */
+private fun currentFraction(book: BookEntity): Float? {
+    val position = book.lastPosition ?: return null
+    return when (book.format) {
+        BookFormat.PDF -> {
+            val pages = book.totalPages ?: return null
+            position.toIntOrNull()?.let { ReadingProgress.forPdf(it, pages) }
+        }
+        BookFormat.EPUB -> runCatching {
+            JSONObject(position).optJSONObject("locations")?.optDouble("totalProgression")
+                ?.takeUnless { it.isNaN() }
+                ?.let { ReadingProgress.forEpub(it) }
+        }.getOrNull()
     }
 }
 

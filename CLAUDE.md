@@ -42,6 +42,7 @@ app/src/main/java/com/yachay/app/
 ### Fluxo de leitura
 - `rememberBookOpener()` (`ui/reader/BookOpener.kt`) é o único ponto que abre livros.
 - **PDF** → rota Compose `PdfReaderRoute`. `PdfDocument` encapsula `PdfRenderer` (não thread-safe → `Mutex`) com cache LRU de bitmaps; páginas em `LazyColumn`.
+- **Zoom do PDF** (`PdfReaderScreen` + `PdfZoom.kt`): sem lib externa. A `LazyColumn` inteira recebe `graphicsLayer` (escala + deslocamento, origem no topo-esquerdo); a rolagem vertical e o fling continuam sendo da lista (os toques chegam já em coordenadas escaladas). Pinça (1×–5×, ancorada entre os dedos) e arrasto horizontal são lidos no passe `Initial`; a pinça é consumida. Sobra vertical: na pinça vira `dispatchRawDelta`; na rolagem, um `NestedScrollConnection` move a janela ampliada quando a lista chega na borda. Duplo toque alterna 1× ↔ 2,5×. ~200 ms após o gesto, as páginas re-renderizam em `largura × zoom` (até 2,5×, 4096 px e 1/10 do heap por bitmap — `PdfDocument.maxRenderWidth`). Página atual = a que cruza o centro **da área visível** (`PdfZoom.visibleCenter`). Zoom não é salvo.
 - **EPUB** → `EpubSessions.open(book)` abre a `Publication` (suspenso) **antes** de iniciar `EpubReaderActivity`. A activity instala a `FragmentFactory` do Readium antes de `super.onCreate` (exigência do `EpubNavigatorFragment`). Se o processo morreu e a sessão sumiu, a activity simplesmente fecha. A sessão é fechada em `onDestroy` quando `isFinishing`.
 
 ### Modelo de dados (Room, `yachay.db`, versão 1, sem export de schema)
@@ -54,6 +55,8 @@ app/src/main/java/com/yachay/app/
 - PDF: `(páginaVisível + 1) / totalPáginas`; `lastPosition` = índice da página (String). Se a lista não rola mais, conta como última página.
 - EPUB: `Locator.locations.totalProgression`; `lastPosition` = `Locator.toJSON()`.
 - Concluído a partir de `0.995` (EPUB raramente chega a 1.0). O `%` exibido nunca mostra 100 antes disso.
+- `progress` = **ponto mais longe já lido** (nunca diminui ao voltar páginas: `ReadingProgress.merge` / `MAX()` em `BookDao.updateProgress`); `lastPosition` = **posição atual**, usada para retomar. Um livro concluído continua "Lido" ao reler trechos. Só "Marcar como não lido" (sheet do livro) zera o progresso — e volta o livro a "Novo"; "Marcar como lido" põe 100%.
+- "Lendo agora" mostra a posição atual (`positionLabel`) e a barra mostra o máximo; se a pessoa voltou, o rótulo ganha "· lido até X%".
 - Gravações usam debounce e rodam em `container.appScope` para não se perderem ao fechar o leitor.
 
 ### Importação (`data/importer/BookImporter.kt`)
@@ -113,9 +116,10 @@ Regra: ornamento entra onde já existe um campo de cor ou um momento de destaque
 ### Ajustes e tema de leitura
 Terceira aba, **Ajustes** (`ui/settings/SettingsScreen.kt`, rota `SettingsRoute`). Hoje tem uma opção: **Tema de leitura** (`domain/ReadingTheme`: `PAPER` padrão, `NIGHT`), salva em DataStore (`data/settings/SettingsRepository`, chave `reading_theme`). Vale só para as páginas dos leitores — o app é sempre escuro.
 - Cores: `ui/reader/ReadingColors.kt` (`ReadingTheme.colors()`: Papel = Cream/Ink, Noturno = Night/Cream).
-- **EPUB**: `EpubPreferences` do Readium (background/text + `Theme.LIGHT/DARK`). O tema inicial é lido em `EpubSessions.open` (o navegador precisa dele antes de a activity existir); mudanças posteriores chegam por `submitPreferences`. A raiz da activity e os ícones da barra de navegação acompanham o tema.
+- **EPUB**: `ReaderPreferences` (`domain/ReaderPreferences.kt`: tema + `fontScale` + `LineSpacing`) vem de um Flow único, `SettingsRepository.readerPreferences`, e vira `EpubPreferences` em `toEpubPreferences()` (`ui/reader/epub/EpubPreferencesMapping.kt`). As preferências iniciais são lidas em `EpubSessions.open` (o navegador precisa delas antes de a activity existir); mudanças posteriores chegam por `submitPreferences` (o Readium re-pagina mantendo o locator). A raiz da activity e os ícones da barra de navegação acompanham o tema.
+- **Texto do EPUB**: botão **"Aa"** na barra do leitor abre `ReaderSettingsSheet` (fonte 70–250% em passos de 10% via `FontScale`, espaçamento Compacto/Normal/Amplo, atalho de tema); os mesmos controles (`ui/reader/ReaderTextControls.kt`) aparecem em Ajustes → "Texto dos EPUBs". Chaves DataStore `epub_font_scale` (float) e `epub_line_spacing` (string); valores inválidos caem no padrão. `fontSize` funciona com os estilos da editora; `lineHeight` **exige** `publisherStyles = false` no Readium 3.0.3 — por isso só desligamos os estilos da editora quando o espaçamento não é Normal.
 - **PDF**: `ReadingTheme.pdfPageFilter()` no `Image` de cada página — Papel = multiplica pelo creme (mantém cores das imagens); Noturno = duotom por luminância (imagens viram duas cores). Páginas com contorno roxo profundo.
-- Nova preferência: adicione chave + Flow em `SettingsRepository` e uma seção em `SettingsScreen` (com `SectionHeader`).
+- Nova preferência: adicione chave + Flow em `SettingsRepository` e uma seção em `SettingsScreen` (com `SectionHeader`). `SettingsRepository` recebe o `DataStore` (`context.settingsStore`) para os testes usarem um arquivo temporário.
 
 ### Ícone do app
 Ícone adaptativo (`res/mipmap-anydpi-v26/ic_launcher*.xml`): fundo `@color/yachay_purple`, frente `@mipmap/ic_launcher_art` (PNG em mdpi…xxxhdpi = 108…432px) recortado de `referencias/ref1.png`. A área visível do launcher (72 de 108dp) corresponde a 1080px da ilustração centrados em (800, 561) — personagem, "zZZ" e livros, com a moldura da ilustração fora do visível; o excedente é preenchido com o roxo. O ícone monocromático (ícones temáticos, Android 13+) é a silhueta vetorial `drawable/ic_launcher_monochrome.xml`. Para trocar a arte, regenere os 5 PNGs com o mesmo enquadramento (a camada inteira tem 1,5× a área visível).
@@ -134,11 +138,12 @@ Terceira aba, **Ajustes** (`ui/settings/SettingsScreen.kt`, rota `SettingsRoute`
 4. Regra de progresso em `ReadingProgress` + teste em `app/src/test`.
 
 ## Testes
-- Unitários (JVM) em `app/src/test`: `BookFormatTest`, `ReadingProgressTest`.
+- Unitários (JVM) em `app/src/test`: `BookFormatTest`, `ReadingProgressTest`, `ReaderPreferencesTest`, `EpubPreferencesMappingTest`, `SettingsRepositoryTest` (DataStore em `TemporaryFolder`).
+- `unitTests.isReturnDefaultValues = true`: enums do Readium (ex.: `Theme`) tocam APIs do Android ao carregar.
 - Não há testes instrumentados ainda; validação de UI/leitores é manual em dispositivo (importar PDF e EPUB, ler, voltar, conferir %, reabrir o app e checar retomada; criar/renomear/excluir coleção, filtrar).
 
 ## Limitações / roadmap
 - Formatos: CBZ, TXT, MOBI/AZW3 (MOBI não tem lib Kotlin madura).
-- PDF sem zoom/pinça e sem busca; EPUB sem ajustes de fonte/tema (Readium suporta via `EpubPreferences`).
+- PDF sem busca; EPUB sem escolha de família de fonte, margens ou alinhamento.
 - Sem marcadores, anotações, ordenação/busca na biblioteca, sincronização ou backup.
 - Se o arquivo for movido/apagado fora do app, a abertura falha com aviso (o livro continua na lista).

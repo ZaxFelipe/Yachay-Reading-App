@@ -28,6 +28,27 @@ class ReadingProgressTest {
     }
 
     @Test
+    fun `merge keeps the furthest point read`() {
+        assertEquals(1f, ReadingProgress.merge(stored = 1f, current = 0.97f), 0f)
+        assertEquals(0.5f, ReadingProgress.merge(stored = 0.4f, current = 0.5f), 0f)
+        assertTrue(ReadingProgress.isDone(ReadingProgress.merge(stored = 1f, current = 0.1f)))
+    }
+
+    @Test
+    fun `merge clamps the current value`() {
+        assertEquals(1f, ReadingProgress.merge(stored = 0.2f, current = 1.4f), 0f)
+        assertEquals(0.2f, ReadingProgress.merge(stored = 0.2f, current = -1f), 0f)
+    }
+
+    @Test
+    fun `finished book stays done after going back a page`() {
+        // Cenário reproduzido no celular: 30/30, volta para 29/30.
+        val finished = ReadingProgress.forPdf(pageIndex = 29, pageCount = 30)
+        val back = ReadingProgress.forPdf(pageIndex = 28, pageCount = 30)
+        assertTrue(ReadingProgress.isDone(ReadingProgress.merge(finished, back)))
+    }
+
+    @Test
     fun `percent never shows 100 before the book is done`() {
         assertEquals(0, ReadingProgress.percent(0f))
         assertEquals(42, ReadingProgress.percent(0.42f))

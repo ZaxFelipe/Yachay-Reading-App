@@ -16,8 +16,8 @@ android {
         applicationId = "com.yachay.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -45,6 +45,16 @@ android {
         }
     }
 
+    // APK com nome e versão: Yachay-0.2.0.apk (debug: Yachay-0.2.0-debug.apk).
+    applicationVariants.all {
+        val variant = this
+        outputs.all {
+            val suffix = if (variant.buildType.name == "release") "" else "-${variant.buildType.name}"
+            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName =
+                "Yachay-${variant.versionName}$suffix.apk"
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -59,6 +69,11 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    testOptions {
+        // Enums do Readium (ex.: Theme) tocam APIs do Android ao carregar; no JVM viram stubs inertes.
+        unitTests.isReturnDefaultValues = true
     }
 }
 

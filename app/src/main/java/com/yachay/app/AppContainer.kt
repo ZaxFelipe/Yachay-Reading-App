@@ -8,6 +8,7 @@ import com.yachay.app.data.importer.ReadiumServices
 import com.yachay.app.data.repo.BookRepository
 import com.yachay.app.data.repo.CollectionRepository
 import com.yachay.app.data.settings.SettingsRepository
+import com.yachay.app.data.settings.settingsStore
 import com.yachay.app.ui.reader.epub.EpubSessions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,7 +32,7 @@ class AppContainer(context: Context) {
 
     val bookImporter = BookImporter(context, database.bookDao(), coverStore, readium)
 
-    val settings = SettingsRepository(context)
+    val settings = SettingsRepository(context.settingsStore)
 
     val epubSessions = EpubSessions(readium, settings)
 }

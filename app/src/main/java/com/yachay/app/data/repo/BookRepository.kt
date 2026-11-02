@@ -26,8 +26,15 @@ class BookRepository(
 
     suspend fun get(id: Long): BookEntity? = dao.getById(id)
 
+    /** Grava a posição atual; o progresso só sobe (ver [ReadingProgress.merge]). */
     suspend fun saveProgress(id: Long, progress: Float, position: String?) =
         dao.updateProgress(id, progress.coerceIn(0f, 1f), position)
+
+    /** Para livros terminados fora do app. */
+    suspend fun markRead(id: Long) = dao.markRead(id)
+
+    /** Único jeito de diminuir o progresso. */
+    suspend fun markUnread(id: Long) = dao.markUnread(id)
 
     suspend fun markOpened(id: Long) = dao.markOpened(id, System.currentTimeMillis())
 

@@ -20,6 +20,12 @@ object ReadingProgress {
 
     fun isDone(progress: Float): Boolean = progress >= DONE_THRESHOLD
 
+    /**
+     * Progresso guardado = ponto mais longe já lido: voltar páginas não desfaz a leitura.
+     * Só "Marcar como não lido" diminui o valor. Espelha o `MAX()` do [BookDao.updateProgress].
+     */
+    fun merge(stored: Float, current: Float): Float = maxOf(stored, current.coerceIn(0f, 1f))
+
     /** Percentual inteiro para exibição; nunca mostra 100% antes de concluir de fato. */
     fun percent(progress: Float): Int {
         if (isDone(progress)) return 100

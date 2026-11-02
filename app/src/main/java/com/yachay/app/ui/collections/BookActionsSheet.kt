@@ -48,6 +48,9 @@ import com.yachay.app.appContainer
 import com.yachay.app.data.db.BookEntity
 import com.yachay.app.ui.components.BookCover
 import com.yachay.app.ui.components.BookStatus
+import com.yachay.app.ui.components.isNew
+import com.yachay.app.domain.ReadingProgress
+import com.yachay.app.ui.theme.Lime
 import com.yachay.app.ui.components.NeoButton
 import com.yachay.app.ui.components.NeoDialog
 import com.yachay.app.ui.components.NeoTextField
@@ -88,13 +91,23 @@ class BookActionsViewModel(
         collections.setBookInCollection(bookId, id, true)
     }
 
+    /** O livro ao vivo: a sheet reflete na hora "Marcar como lido/não lido". */
+    fun observeBook() = books.observe(bookId)
+
+    fun markRead() = viewModelScope.launch { books.markRead(bookId) }
+
+    fun markUnread() = viewModelScope.launch { books.markUnread(bookId) }
+
     fun delete(book: BookEntity, onDone: () -> Unit) = viewModelScope.launch {
         books.delete(book)
         onDone()
     }
 }
 
-/** Sheet aberta com long-press num livro: marcar coleções, criar coleção, remover da biblioteca. */
+/**
+ * Sheet aberta com long-press num livro: marcar como lido/não lido, marcar coleções, criar
+ * coleção, remover da biblioteca.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BookActionsSheet(book: BookEntity, onDismiss: () -> Unit) {
@@ -102,6 +115,8 @@ fun BookActionsSheet(book: BookEntity, onDismiss: () -> Unit) {
     val viewModel = viewModel(key = "book-actions-${book.id}") {
         BookActionsViewModel(book.id, context.appContainer)
     }
+    val liveBook by remember(viewModel) { viewModel.observeBook() }.collectAsStateWithLifecycle(initialValue = book)
+    val current = liveBook ?: book
     val options by viewModel.options.collectAsStateWithLifecycle()
     var newName by rememberSaveable { mutableStateOf("") }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -130,7 +145,7 @@ fun BookActionsSheet(book: BookEntity, onDismiss: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                BookCover(book, Modifier.width(64.dp), titleOnPlaceholder = false)
+                BookCover(current, Modifier.width(64.dp), titleOnPlaceholder = false)
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(book.title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(
@@ -141,9 +156,11 @@ fun BookActionsSheet(book: BookEntity, onDismiss: () -> Unit) {
                         overflow = TextOverflow.Ellipsis,
                     )
                     Spacer(Modifier.height(2.dp))
-                    BookStatus(book)
+                    BookStatus(current)
                 }
             }
+
+            ReadStateButtons(current, onMarkRead = viewModel::markRead, onMarkUnread = viewModel::markUnread)
 
             Text(stringResource(R.string.book_actions_collections), style = MaterialTheme.typography.titleMedium)
             options.forEach { option ->
@@ -187,6 +204,25 @@ fun BookActionsSheet(book: BookEntity, onDismiss: () -> Unit) {
             onDismiss = { confirmDelete = false },
         ) {
             Text(stringResource(R.string.book_remove_confirm_body, book.title), style = MaterialTheme.typography.bodyLarge)
+        }
+    }
+}
+
+/** "Marcar como lido" (terminou fora do app) e "não lido" (o único jeito de baixar o progresso). */
+@Composable
+private fun ReadStateButtons(book: BookEntity, onMarkRead: () -> Unit, onMarkUnread: () -> Unit) {
+    val done = ReadingProgress.isDone(book.progress)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (!done) {
+            NeoButton(onClick = onMarkRead, color = Lime, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Filled.Check, contentDescription = null)
+                Text(stringResource(R.string.book_actions_mark_read))
+            }
+        }
+        if (!book.isNew) {
+            NeoButton(onClick = onMarkUnread, color = Cream, modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.book_actions_mark_unread))
+            }
         }
     }
 }
