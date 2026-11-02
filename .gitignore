@@ -12,3 +12,8 @@
 *.apk
 *.aab
 /.taste-skill/
+
+# Assinatura de release
+keystore.properties
+*.jks
+*.keystore
