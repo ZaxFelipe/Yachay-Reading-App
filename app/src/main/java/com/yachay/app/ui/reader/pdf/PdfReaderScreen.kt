@@ -62,6 +62,15 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yachay.app.R
+import com.yachay.app.ui.reader.SearchSheet
+import androidx.compose.material.icons.filled.Search
+import kotlinx.coroutines.flow.Flow
+import com.yachay.app.ui.reader.BookmarkButton
+import com.yachay.app.ui.reader.AnnotationsSheet
+import com.yachay.app.ui.reader.AnnotationItem
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material.icons.automirrored.filled.List
+import com.yachay.app.ui.reader.PageSource
 import com.yachay.app.appContainer
 import com.yachay.app.domain.ReadingTheme
 import com.yachay.app.ui.reader.colors
@@ -99,7 +108,12 @@ fun PdfReaderScreen(bookId: Long, onBack: () -> Unit) {
     val currentPage by viewModel.currentPage.collectAsStateWithLifecycle()
     val goal by viewModel.goal.collectAsStateWithLifecycle()
     val goalNotice by viewModel.goalNotice.collectAsStateWithLifecycle()
-    val unlockedLevel by viewModel.unlockedLevel.collectAsStateWithLifecycle()
+    val lastNotice by viewModel.lastNotice.collectAsStateWithLifecycle()
+    val bookmarks by viewModel.bookmarks.collectAsStateWithLifecycle()
+    var showAnnotations by rememberSaveable { mutableStateOf(false) }
+    var showSearch by rememberSaveable { mutableStateOf(false) }
+    val searchQuery by viewModel.search.query.collectAsStateWithLifecycle()
+    val searchState by viewModel.search.state.collectAsStateWithLifecycle()
     val readingTheme by context.appContainer.settings.readingTheme
         .collectAsStateWithLifecycle(initialValue = ReadingTheme.Default)
 
@@ -118,12 +132,30 @@ fun PdfReaderScreen(bookId: Long, onBack: () -> Unit) {
                     onClick = onBack,
                 )
             },
+            actions = {
+                if (ready != null) {
+                    // Sem texto (CBZ, ou PDF abaixo do Android 15) a lupa nem aparece.
+                    if (viewModel.canSearch) {
+                        NeoIconButton(
+                            Icons.Filled.Search,
+                            contentDescription = stringResource(R.string.search_open),
+                            onClick = { showSearch = true },
+                        )
+                    }
+                    BookmarkButton(marked = currentPage in bookmarks, onClick = { viewModel.toggleBookmark(currentPage) })
+                    NeoIconButton(
+                        Icons.AutoMirrored.Filled.List,
+                        contentDescription = stringResource(R.string.annotations_open),
+                        onClick = { showAnnotations = true },
+                    )
+                }
+            },
             bottom = ready?.let {
                 {
                     Row(verticalAlignment = Alignment.Bottom) {
                         Box(Modifier.weight(1f)) {
                             NeoProgressBar(progress = viewModel.progressFor(currentPage), goal = goal)
-                            DailyGoalNotice(visible = goalNotice, progress = goal, unlockedLevel = unlockedLevel)
+                            DailyGoalNotice(visible = goalNotice, progress = goal, unlockedLevel = lastNotice?.unlockedLevel, streakBonus = lastNotice?.streakBonus)
                         }
                         Spacer(Modifier.width(12.dp))
                         Text(
@@ -146,18 +178,55 @@ fun PdfReaderScreen(bookId: Long, onBack: () -> Unit) {
                 NeoEmptyState(title = stringResource(R.string.reader_error_title), body = stringResource(R.string.book_open_failed), color = Danger)
                 NeoButton(onClick = onBack, color = Cream) { Text(stringResource(R.string.action_back)) }
             }
-            is PdfReaderState.Ready -> PdfPages(s, readingTheme, viewModel::onPageVisible)
+            is PdfReaderState.Ready -> PdfPages(s, readingTheme, viewModel::onPageVisible, viewModel.jumpTo)
         }
+    }
+
+    if (showSearch && state is PdfReaderState.Ready) {
+        SearchSheet(
+            query = searchQuery,
+            onQueryChange = { viewModel.search.query.value = it },
+            state = searchState,
+            onOpen = { hit ->
+                viewModel.jumpTo(hit.target)
+                showSearch = false
+            },
+            onDismiss = { showSearch = false },
+        )
+    }
+
+    if (showAnnotations && state is PdfReaderState.Ready) {
+        AnnotationsSheet(
+            bookmarks = bookmarks.entries.sortedBy { it.key }.map { (page, id) ->
+                AnnotationItem(id, stringResource(R.string.annotation_page, page + 1))
+            },
+            highlights = null,
+            onOpen = { id ->
+                bookmarks.entries.firstOrNull { it.value == id }?.let { viewModel.jumpTo(it.key) }
+                showAnnotations = false
+            },
+            onRemove = viewModel::removeAnnotation,
+            onDismiss = { showAnnotations = false },
+        )
     }
 }
 
 @Composable
-private fun PdfPages(state: PdfReaderState.Ready, theme: ReadingTheme, onPageVisible: (Int) -> Unit) {
+private fun PdfPages(
+    state: PdfReaderState.Ready,
+    theme: ReadingTheme,
+    onPageVisible: (Int) -> Unit,
+    jumpTo: Flow<Int>,
+) {
     val document = state.document
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = state.initialPage)
     // Zoom não é salvo: reabrir o livro começa em 1×.
     val zoom = remember(listState) { PdfZoomState(listState) }
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(jumpTo) {
+        jumpTo.collect { listState.scrollToItem(it.coerceIn(0, document.pageCount - 1)) }
+    }
 
     LaunchedEffect(listState, document) {
         snapshotFlow {
@@ -248,7 +317,7 @@ private suspend fun PointerInputScope.detectPinchAndPan(zoom: PdfZoomState) {
 }
 
 @Composable
-private fun PdfPage(document: PdfDocument, index: Int, theme: ReadingTheme, renderScale: Float) {
+private fun PdfPage(document: PageSource, index: Int, theme: ReadingTheme, renderScale: Float) {
     val filter = remember(theme) { theme.pdfPageFilter() }
     BoxWithConstraints(
         Modifier

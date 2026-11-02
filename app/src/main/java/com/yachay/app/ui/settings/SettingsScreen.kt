@@ -31,6 +31,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -41,11 +43,14 @@ import com.yachay.app.AppContainer
 import com.yachay.app.BuildConfig
 import com.yachay.app.R
 import com.yachay.app.appContainer
+import com.yachay.app.domain.DailyGoal
 import com.yachay.app.domain.LineSpacing
 import com.yachay.app.domain.ReaderPreferences
 import com.yachay.app.domain.ReadingTheme
-import com.yachay.app.ui.reader.FontScaleStepper
-import com.yachay.app.ui.reader.LineSpacingChips
+import com.yachay.app.domain.PageMargins
+import com.yachay.app.domain.ReaderFont
+import com.yachay.app.domain.TextAlignment
+import com.yachay.app.ui.reader.EpubTextControls
 import com.yachay.app.ui.components.NeoPressable
 import com.yachay.app.ui.components.NeoTopBar
 import com.yachay.app.ui.components.SectionHeader
@@ -61,6 +66,7 @@ import com.yachay.app.ui.theme.halftone
 import com.yachay.app.ui.theme.neoBorder
 import com.yachay.app.ui.theme.paperGrain
 import com.yachay.app.ui.theme.shadeFor
+import com.yachay.app.ui.theme.tabular
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -69,6 +75,12 @@ import kotlinx.coroutines.launch
 class SettingsViewModel(container: AppContainer) : ViewModel() {
 
     private val settings = container.settings
+    private val dailyGoal = container.dailyGoal
+
+    val goalTarget: StateFlow<Int> = dailyGoal.target
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DailyGoal.DEFAULT_TARGET)
+
+    fun setGoalTarget(target: Int) = viewModelScope.launch { dailyGoal.setTarget(target) }
 
     val readingTheme: StateFlow<ReadingTheme> = settings.readingTheme
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReadingTheme.Default)
@@ -83,6 +95,12 @@ class SettingsViewModel(container: AppContainer) : ViewModel() {
     fun setFontScale(scale: Float) = viewModelScope.launch { settings.setFontScale(scale) }
 
     fun setLineSpacing(spacing: LineSpacing) = viewModelScope.launch { settings.setLineSpacing(spacing) }
+
+    fun setFont(font: ReaderFont) = viewModelScope.launch { settings.setFont(font) }
+
+    fun setMargins(margins: PageMargins) = viewModelScope.launch { settings.setMargins(margins) }
+
+    fun setTextAlign(align: TextAlignment) = viewModelScope.launch { settings.setTextAlign(align) }
 }
 
 @Composable
@@ -91,6 +109,7 @@ fun SettingsScreen() {
     val viewModel = viewModel { SettingsViewModel(context.appContainer) }
     val selected by viewModel.readingTheme.collectAsStateWithLifecycle()
     val reader by viewModel.readerPreferences.collectAsStateWithLifecycle()
+    val goalTarget by viewModel.goalTarget.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = Night,
@@ -111,7 +130,27 @@ fun SettingsScreen() {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            SectionHeader(stringResource(R.string.settings_reading_theme))
+            SectionHeader(stringResource(R.string.settings_daily_goal))
+            Text(
+                stringResource(R.string.settings_daily_goal_body, DailyGoal.XP_PER_TARGET_PAGE),
+                style = MaterialTheme.typography.bodyMedium,
+                color = LocalContentColor.current.copy(alpha = 0.72f),
+            )
+            Spacer(Modifier.height(4.dp))
+            Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                DailyGoal.TARGETS.forEach { target ->
+                    GoalOption(
+                        target = target,
+                        selected = target == goalTarget,
+                        onClick = { viewModel.setGoalTarget(target) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                    )
+                }
+            }
+
+            SectionHeader(stringResource(R.string.settings_reading_theme), modifier = Modifier.padding(top = 20.dp))
             Text(
                 stringResource(R.string.settings_reading_theme_body),
                 style = MaterialTheme.typography.bodyMedium,
@@ -139,18 +178,42 @@ fun SettingsScreen() {
                 style = MaterialTheme.typography.bodyMedium,
                 color = LocalContentColor.current.copy(alpha = 0.72f),
             )
-            Text(stringResource(R.string.reader_font_size), style = MaterialTheme.typography.titleMedium)
-            FontScaleStepper(reader.fontScale, viewModel::setFontScale)
-            Text(
-                stringResource(R.string.reader_line_spacing),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(top = 4.dp),
+            EpubTextControls(
+                preferences = reader,
+                onFontScale = viewModel::setFontScale,
+                onLineSpacing = viewModel::setLineSpacing,
+                onFont = viewModel::setFont,
+                onMargins = viewModel::setMargins,
+                onTextAlign = viewModel::setTextAlign,
+                noteColor = LocalContentColor.current.copy(alpha = 0.72f),
             )
-            LineSpacingChips(reader.lineSpacing, viewModel::setLineSpacing)
+        }
+    }
+}
+
+/** Uma opção de meta: o número de páginas em destaque e o XP que ela vale. */
+@Composable
+private fun GoalOption(target: Int, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val description = stringResource(R.string.settings_daily_goal_option, target, DailyGoal.xpFor(target))
+    NeoPressable(
+        onClick = onClick,
+        modifier = modifier.semantics(mergeDescendants = true) { contentDescription = description },
+        color = if (selected) Lime else Cream,
+        shadow = if (selected) 5.dp else 3.dp,
+        role = Role.RadioButton,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp, horizontal = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(target.toString(), style = MaterialTheme.typography.headlineMedium.tabular(), color = Ink)
+            Text(stringResource(R.string.settings_daily_goal_pages), style = MaterialTheme.typography.labelMedium, color = Ink)
             Text(
-                stringResource(R.string.reader_line_spacing_note),
-                style = MaterialTheme.typography.bodySmall,
-                color = LocalContentColor.current.copy(alpha = 0.72f),
+                stringResource(R.string.settings_daily_goal_xp, DailyGoal.xpFor(target)),
+                style = MaterialTheme.typography.labelSmall.tabular(),
+                color = Ink.copy(alpha = 0.72f),
             )
         }
     }

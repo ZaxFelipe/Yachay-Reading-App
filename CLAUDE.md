@@ -4,11 +4,11 @@ App Android de leitura (Kotlin + Jetpack Compose). "Yachay" significa "saber/apr
 A UI e as strings estão em **português (pt-BR)**.
 
 ## Features (v1)
-1. **Importar livros do dispositivo**: PDF e EPUB, pelo seletor do sistema (SAF). O arquivo fica onde está; o app guarda a URI com permissão persistida.
+1. **Importar livros do dispositivo**: PDF, EPUB e quadrinhos CBZ, pelo seletor do sistema (SAF). O arquivo fica onde está; o app guarda a URI com permissão persistida.
 2. **Coleções**: agrupar livros já importados (um livro pode estar em várias coleções). Filtro por coleção na Biblioteca.
 3. **Progresso de leitura**: barra em cada livro (`NeoProgressBar`), seção "Continuar lendo" e retomada da última posição.
 
-Leitores embutidos: PDF via `PdfRenderer` nativo; EPUB via **Readium Kotlin Toolkit**.
+Leitores embutidos: PDF via `PdfRenderer` nativo; CBZ via container ZIP do Readium (mesmo leitor de páginas do PDF); EPUB via **Readium Kotlin Toolkit**. Nos leitores: marcadores, destaques (EPUB), busca no livro (EPUB; PDF só no Android 15+). Biblioteca com busca e ordenação.
 
 ## Build e execução
 Requisitos: JDK 17, Android SDK com `platforms/android-35` (`local.properties` aponta o `sdk.dir`; não versionado).
@@ -28,7 +28,7 @@ Camadas simples, sem framework de DI: `AppContainer` (criado em `YachayApp`) ins
 app/src/main/java/com/yachay/app/
   YachayApp.kt / AppContainer.kt / MainActivity.kt
   domain/          BookFormat (formatos + detecção), ReadingProgress (regras de %)
-  data/db/         Room: Entities.kt, BookDao, CollectionDao, YachayDatabase
+  data/db/         Room: Entities.kt, BookDao, CollectionDao, AnnotationDao, ReadingDayDao, YachayDatabase, Migrations
   data/repo/       BookRepository, CollectionRepository
   data/importer/   BookImporter (SAF → metadados + capa → Room), CoverStore, ReadiumServices
   ui/theme/        Color (paleta), Type (Space Grotesk), Theme, NeoModifiers
@@ -37,7 +37,7 @@ app/src/main/java/com/yachay/app/
   ui/library/      Biblioteca (grade, filtros, "Continuar lendo", importação)
   ui/collections/  Lista, detalhe, BookActionsSheet (marcar coleções / remover livro)
   ui/profile/      Perfil (nível, XP, avatares, páginas, lidos recentemente) + Avatar/ProfileButton
-  ui/reader/       BookOpener (despacha por formato), pdf/, epub/
+  ui/reader/       BookOpener (despacha por formato), PageSource, BookSearch/SearchSheet, AnnotationsSheet, pdf/, cbz/, epub/
 ```
 
 ### Fluxo de leitura
@@ -46,11 +46,19 @@ app/src/main/java/com/yachay/app/
 - **Zoom do PDF** (`PdfReaderScreen` + `PdfZoom.kt`): sem lib externa. A `LazyColumn` inteira recebe `graphicsLayer` (escala + deslocamento, origem no topo-esquerdo); a rolagem vertical e o fling continuam sendo da lista (os toques chegam já em coordenadas escaladas). Pinça (1×–5×, ancorada entre os dedos) e arrasto horizontal são lidos no passe `Initial`; a pinça é consumida. Sobra vertical: na pinça vira `dispatchRawDelta`; na rolagem, um `NestedScrollConnection` move a janela ampliada quando a lista chega na borda. Duplo toque alterna 1× ↔ 2,5×. ~200 ms após o gesto, as páginas re-renderizam em `largura × zoom` (até 2,5×, 4096 px e 1/10 do heap por bitmap — `PdfDocument.maxRenderWidth`). Página atual = a que cruza o centro **da área visível** (`PdfZoom.visibleCenter`). Zoom não é salvo.
 - **EPUB** → `EpubSessions.open(book)` abre a `Publication` (suspenso) **antes** de iniciar `EpubReaderActivity`. A activity instala a `FragmentFactory` do Readium antes de `super.onCreate` (exigência do `EpubNavigatorFragment`). Se o processo morreu e a sessão sumiu, a activity simplesmente fecha. A sessão é fechada em `onDestroy` quando `isFinishing`.
 
-### Modelo de dados (Room, `yachay.db`, versão 1, sem export de schema)
+### Leitor de páginas (PDF e CBZ), busca e anotações
+- `PdfReaderRoute` é o **leitor de páginas**: `PdfReaderViewModel` abre `PdfDocument` ou `cbz/CbzDocument` (ambos `PageSource`). CBZ: `ReadiumServices.openArchive` (container ZIP com acesso aleatório na URI do SAF); páginas = `domain/ComicPages` (só imagens, ordem natural). `BookFormat.isPaged` = tem `totalPages` e "Página X de Y".
+- Busca: `BookSearch` (debounce 300 ms, cancela a anterior, lotes progressivos) + `SearchSheet`. EPUB: `epub/EpubSearch` (`publication.search`, sem acento/maiúsculas). PDF: `PdfDocument.pageText` só na API 35+ (abaixo disso a lupa não aparece). Normalização/trechos em `domain/TextSearch` (também usado na busca da Biblioteca).
+- Marcadores/destaques: tabela `annotations`. PDF/CBZ: marcador por página. EPUB: `epub/EpubAnnotations` (decorações grupo `"highlights"`, "Destacar" via `selectionActionModeCallback`, marcador da tela por `Bookmarks.sameScreen`).
+- Leitor de EPUB usa `NeoTopBar(stackTitle = true)` (título numa linha própria, muitas ações).
+
+### Modelo de dados (Room, `yachay.db`, versão 2, schemas exportados em `app/schemas`)
 - `books`: `uri` (único), `title`, `author?`, `format` (enum → TEXT), `coverPath?`, `totalPages?` (só PDF), `progress` (0f..1f), `lastPosition?`, `addedAt`, `lastOpenedAt?`
 - `collections`: `name`, `createdAt`
 - `book_collection`: (`bookId`, `collectionId`) com FK `CASCADE` nos dois lados
-- DAOs expõem `Flow` → a UI reage sozinha a progresso/coleções. **Mudou o schema? Suba `version` e escreva uma `Migration`** (não use `fallbackToDestructiveMigration`: apagaria a biblioteca do usuário).
+- `annotations`: `bookId` (FK `CASCADE`), `type` BOOKMARK/HIGHLIGHT, `position` (PDF: índice; EPUB: `Locator.toJSON()`), `text?`, `createdAt`
+- `reading_days`: `date` (ISO, PK), `pages`, `goalMet` — histórico do calendário, gravado em `DailyGoalRepository.recordPage` (valor absoluto do dia)
+- DAOs expõem `Flow` → a UI reage sozinha a progresso/coleções. **Mudou o schema? Suba `version`, escreva a SQL em `Migrations` e um caso no `MigrationsTest`** (SQLite da JVM via `sqlite-jdbc`, compara com `app/schemas`). Não use `fallbackToDestructiveMigration`: apagaria a biblioteca do usuário.
 
 ### Regras de progresso (`domain/ReadingProgress.kt`)
 - PDF: `(páginaVisível + 1) / totalPáginas`; `lastPosition` = índice da página (String). Se a lista não rola mais, conta como última página.
@@ -61,14 +69,14 @@ app/src/main/java/com/yachay/app/
 - Gravações usam debounce e rodam em `container.appScope` para não se perderem ao fechar o leitor.
 
 ### Meta diária (`domain/DailyGoal.kt`, `data/goals/DailyGoalRepository.kt`)
-- Meta: **10 páginas por dia** (`DailyGoal.DEFAULT_TARGET`, fixa por enquanto), somando todos os livros. Vira o dia → recomeça do zero (só o dia atual é guardado, DataStore `daily_goal`: chaves `day` e `pages`).
+- Meta: **5, 10 (padrão), 20 ou 30 páginas por dia** (`DailyGoal.TARGETS`, escolhida em Ajustes, chave `target` no `daily_goal`), somando todos os livros. Paga uma vez por dia (`goal_met_day`); baixar o alvo no meio do dia conta na próxima página registrada. Vira o dia → recomeça do zero (só o dia atual é guardado, DataStore `daily_goal`: chaves `day` e `pages`).
 - Uma "página" conta depois de `PAGE_DWELL_MS` (3 s) parada nela, uma vez por dia. Chave por livro: PDF = `DailyGoal.pdfPage(índice)`; EPUB = `DailyGoal.epubPage(href, progression)` — a `position` do Readium **não serve** (num livro real uma posição cobre várias telas). Mudar a fonte do EPUB gera telas novas.
-- Exibição: barra em **setores, um por página da meta** (10), logo acima do trilho do `NeoProgressBar` (parâmetro `goal: DailyGoalProgress`, `DailyGoalSegments`); setor lido = limão, vazio = papel. Aparece nas barras dos dois leitores e no "Lendo agora" (sempre sobre roxo). O percentual do livro fica ao lado do trilho, não da meta. **Batida a meta, a barra de setores some** (até o dia seguinte). Ao cruzar 60% (`almostThereAt`, em inteiros), `DailyGoalNotice` mostra "Quase lá! 6 de 10 páginas hoje" (creme) por 3 s num `Popup` abaixo da barra (não empurra o layout do EPUB); na página que completa a meta (`reachesTarget`), o mesmo popup vira "Meta batida! 10 páginas hoje" (limão). Cada aviso aparece uma vez por dia (`PageRecorded.shouldNotify`).
+- Exibição: barra em **setores, um por página da meta** (acima de 10, agrupados: 20 → 10×2, 30 → 10×3; `DailyGoal.segments`), logo acima do trilho do `NeoProgressBar` (parâmetro `goal: DailyGoalProgress`, `DailyGoalSegments`); setor lido = limão, vazio = papel. Aparece nas barras dos dois leitores e no "Lendo agora" (sempre sobre roxo). O percentual do livro fica ao lado do trilho, não da meta. **Batida a meta, a barra de setores some** (até o dia seguinte). Ao cruzar 60% (`almostThereAt`, em inteiros), `DailyGoalNotice` mostra "Quase lá! 6 de 10 páginas hoje" (creme) por 3 s num `Popup` abaixo da barra (não empurra o layout do EPUB); na página que completa a meta (`reachesTarget`), o mesmo popup vira "Meta batida! 10 páginas hoje" (limão). Cada aviso aparece uma vez por dia (`PageRecorded.shouldNotify`).
 
 ### Perfil, XP e avatares (`domain/ReaderLevel.kt`, `ui/profile/`)
 - O avatar do nível atual fica no canto superior esquerdo da Biblioteca (`ProfileButton`, mostra `ReaderStats.avatar`) e abre `ProfileRoute` (tela com voltar; sem aba própria na barra inferior).
-- Cada meta diária batida = **100 XP** (`ReaderLevel.XP_PER_GOAL`). Subir do nível L para L+1 custa L metas (`xpFor(L) = 100·(L−1)·L/2`): nível 2 com 1 meta, nível 16 com 120. Um avatar por nível. Na galeria do Perfil, qualquer avatar desbloqueado pode virar a foto (chave `avatar` no DataStore `daily_goal`; `ReaderStats.avatar` ignora escolha bloqueada). Ao desbloquear um nível, `recordPage` apaga a escolha na mesma transação → o avatar novo vira a foto.
-- Totais no mesmo DataStore da meta (`daily_goal`), gravados na mesma transação de `recordPage`: `total_pages` (páginas contadas pela meta, cada uma uma vez por dia) e `goals_met`. XP e nível são derivados (`ReaderStats`), então dá para recalibrar a curva sem migrar dados. `PageRecorded.unlockedLevel` ≠ null quando a meta desbloqueou avatar → o aviso vira "Meta batida! Nível N: avatar novo".
+- Cada meta diária batida = **10 XP por página da meta** (`DailyGoal.xpFor`; a padrão vale 100 = `ReaderLevel.XP_PER_GOAL`). XP é **guardado** (chave `xp`; vindo da 0.3.0 = `goals_met × 100`). Sequência de dias (`domain/Streak`, chaves `streak_*`): a cada 7 dias seguidos, +100 XP fixos; aviso "Meta batida! 7 dias seguidos" (prioridade: avatar > sequência > meta). Perfil mostra sequência/recorde e o calendário (`ui/profile/ReadingCalendar`, `domain/CalendarGrid`). Subir do nível L para L+1 custa L metas (`xpFor(L) = 100·(L−1)·L/2`): nível 2 com 1 meta, nível 16 com 120. Um avatar por nível. Na galeria do Perfil, qualquer avatar desbloqueado pode virar a foto (chave `avatar` no DataStore `daily_goal`; `ReaderStats.avatar` ignora escolha bloqueada). Ao desbloquear um nível, `recordPage` apaga a escolha na mesma transação → o avatar novo vira a foto.
+- Totais no mesmo DataStore da meta (`daily_goal`), gravados na mesma transação de `recordPage`: `total_pages` (páginas contadas pela meta, cada uma uma vez por dia) e `goals_met`. Nível é derivado do XP guardado (`ReaderStats`). `PageRecorded.unlockedLevel` ≠ null quando a meta desbloqueou avatar → o aviso vira "Meta batida! Nível N: avatar novo".
 - "Lidos recentemente" = livros com `lastOpenedAt`, mais recente primeiro (`BookDao.observeRecentlyOpened`, 5).
 - Avatares: `res/drawable-nodpi/avatar_01..16.webp` (256px), recortados da grade 4×4 de `referencias/ref2.png` — quadrado entre o topo de cada quadro e o rótulo "Lvl N". Bloqueados aparecem sem cor, esmaecidos e com cadeado.
 
@@ -99,7 +107,7 @@ Tema **escuro único** (fundo `Night`). Princípio (adaptado da skill *taste*): 
 Barras do sistema com ícones claros nas duas (topo roxo, fundo Night) — `YachayStatusBar` / `YachayNavigationBar` em `MainActivity.kt`.
 
 Regras:
-- **Use sempre os componentes `Neo*`** (`NeoSurface`, `NeoPressable`, `NeoButton`, `NeoIconButton`, `NeoFab`, `NeoChip`, `NeoProgressBar`, `NeoTopBar`, `NeoTextField`, `NeoDialog`, `NeoEmptyState`, `NeoSnackbarHost`, `SectionHeader`). Nada de Material cru com elevação/ripple.
+- **Use sempre os componentes `Neo*`** (`NeoSheet`, `NeoSurface`, `NeoPressable`, `NeoButton`, `NeoIconButton`, `NeoFab`, `NeoChip`, `NeoProgressBar`, `NeoTopBar`, `NeoTextField`, `NeoDialog`, `NeoEmptyState`, `NeoSnackbarHost`, `SectionHeader`). Nada de Material cru com elevação/ripple.
 - Contorno `Ink` de 2.5dp, cantos de 4dp, sombra dura deslocada (4dp; 5-6dp nos objetos principais) sem blur. Clicáveis "afundam" sobre a sombra (`NeoPressable`).
 - **As capas são os objetos**: na estante, a capa leva contorno + sombra e o texto fica solto embaixo, sem cartão (`BookCard`). Coleções mostram as capas em leque (`CoverFan`) sobre a cor da coleção.
 - Cada tela responde uma pergunta com o maior elemento. Biblioteca: "onde eu parei?" → `ReadingNowCard` ("Página 13 de 30 · faltam 17", toque único para continuar).
@@ -127,10 +135,10 @@ Primitivas em `ui/theme/Textures.kt` (modifiers e shapes) e `ui/components/Ornam
 Regra: ornamento entra onde já existe um campo de cor ou um momento de destaque, nunca solto no meio do conteúdo, e nunca por cima de texto. Texturas são desenhadas com `drawWithCache` (uma vez por tamanho) e cortadas nos limites do elemento. Ornamentos decorativos contrariam a skill *taste*; foram pedidos explicitamente para o app ficar "menos cru".
 
 ### Ajustes e tema de leitura
-Terceira aba, **Ajustes** (`ui/settings/SettingsScreen.kt`, rota `SettingsRoute`). Hoje tem uma opção: **Tema de leitura** (`domain/ReadingTheme`: `PAPER` padrão, `NIGHT`), salva em DataStore (`data/settings/SettingsRepository`, chave `reading_theme`). Vale só para as páginas dos leitores — o app é sempre escuro.
+Terceira aba, **Ajustes** (`ui/settings/SettingsScreen.kt`, rota `SettingsRoute`): **Meta diária**, **Tema de leitura** (`domain/ReadingTheme`: `PAPER` padrão, `NIGHT`), salva em DataStore (`data/settings/SettingsRepository`, chave `reading_theme`). Vale só para as páginas dos leitores — o app é sempre escuro.
 - Cores: `ui/reader/ReadingColors.kt` (`ReadingTheme.colors()`: Papel = Cream/Ink, Noturno = Night/Cream).
 - **EPUB**: `ReaderPreferences` (`domain/ReaderPreferences.kt`: tema + `fontScale` + `LineSpacing`) vem de um Flow único, `SettingsRepository.readerPreferences`, e vira `EpubPreferences` em `toEpubPreferences()` (`ui/reader/epub/EpubPreferencesMapping.kt`). As preferências iniciais são lidas em `EpubSessions.open` (o navegador precisa delas antes de a activity existir); mudanças posteriores chegam por `submitPreferences` (o Readium re-pagina mantendo o locator). A raiz da activity e os ícones da barra de navegação acompanham o tema.
-- **Texto do EPUB**: botão **"Aa"** na barra do leitor abre `ReaderSettingsSheet` (fonte 70–250% em passos de 10% via `FontScale`, espaçamento Compacto/Normal/Amplo, atalho de tema); os mesmos controles (`ui/reader/ReaderTextControls.kt`) aparecem em Ajustes → "Texto dos EPUBs". Chaves DataStore `epub_font_scale` (float) e `epub_line_spacing` (string); valores inválidos caem no padrão. `fontSize` funciona com os estilos da editora; `lineHeight` **exige** `publisherStyles = false` no Readium 3.0.3 — por isso só desligamos os estilos da editora quando o espaçamento não é Normal.
+- **Texto do EPUB**: botão **"Aa"** na barra do leitor abre `ReaderSettingsSheet` (fonte 70–250% em passos de 10% via `FontScale`, família — Do livro/Serifada/Sem serifa/Legível = OpenDyslexic embutida no Readium —, espaçamento, margens, alinhamento, atalho de tema; todos em `EpubTextControls`); os mesmos controles (`ui/reader/ReaderTextControls.kt`) aparecem em Ajustes → "Texto dos EPUBs". Chaves DataStore `epub_font_scale` (float) e `epub_line_spacing` (string); valores inválidos caem no padrão. `fontSize` funciona com os estilos da editora; `lineHeight` e `textAlign` **exigem** `publisherStyles = false` no Readium 3.0.3 (`fontFamily`/`pageMargins` não) — por isso só desligamos os estilos da editora com espaçamento ≠ Normal ou alinhamento ≠ Do livro (`ReaderPreferences.overridesPublisherStyles`). Chaves `epub_font_family`, `epub_margins`, `epub_text_align`; ordem da estante em `library_sort`.
 - **PDF**: `ReadingTheme.pdfPageFilter()` no `Image` de cada página — Papel = multiplica pelo creme (mantém cores das imagens); Noturno = duotom por luminância (imagens viram duas cores). Páginas com contorno roxo profundo.
 - Nova preferência: adicione chave + Flow em `SettingsRepository` e uma seção em `SettingsScreen` (com `SectionHeader`). `SettingsRepository` recebe o `DataStore` (`context.settingsStore`) para os testes usarem um arquivo temporário.
 
@@ -151,12 +159,14 @@ Terceira aba, **Ajustes** (`ui/settings/SettingsScreen.kt`, rota `SettingsRoute`
 4. Regra de progresso em `ReadingProgress` + teste em `app/src/test`.
 
 ## Testes
-- Unitários (JVM) em `app/src/test`: `DailyGoalTest`, `DailyGoalRepositoryTest`, `ReaderLevelTest`, `BookFormatTest`, `ReadingProgressTest`, `ReaderPreferencesTest`, `EpubPreferencesMappingTest`, `SettingsRepositoryTest` (DataStore em `TemporaryFolder`).
+- Ícones que faltam no `material-icons-core` ficam em `YachayIcons` (vetores), não adicione o pacote estendido.
+
+- Unitários (JVM) em `app/src/test`: `MigrationsTest`, `StreakTest`, `CalendarGridTest`, `TextSearchTest`, `LibraryFilterTest`, `ComicPagesTest`, `BookmarksTest`, `DailyGoalTest`, `DailyGoalRepositoryTest`, `ReaderLevelTest`, `BookFormatTest`, `ReadingProgressTest`, `ReaderPreferencesTest`, `EpubPreferencesMappingTest`, `SettingsRepositoryTest` (DataStore em `TemporaryFolder`).
 - `unitTests.isReturnDefaultValues = true`: enums do Readium (ex.: `Theme`) tocam APIs do Android ao carregar.
 - Não há testes instrumentados ainda; validação de UI/leitores é manual em dispositivo (importar PDF e EPUB, ler, voltar, conferir %, reabrir o app e checar retomada; criar/renomear/excluir coleção, filtrar).
 
 ## Limitações / roadmap
-- Formatos: CBZ, TXT, MOBI/AZW3 (MOBI não tem lib Kotlin madura).
-- PDF sem busca; EPUB sem escolha de família de fonte, margens ou alinhamento.
-- Sem marcadores, anotações, ordenação/busca na biblioteca, sincronização ou backup.
+- Formatos: CBR, TXT, MOBI/AZW3 (MOBI não tem lib Kotlin madura).
+- Busca no PDF só no Android 15+; destaques só no EPUB; sem notas de texto nos destaques.
+- Leitura em voz alta (task 006) ainda não feita. Sem sincronização ou backup.
 - Se o arquivo for movido/apagado fora do app, a abertura falha com aviso (o livro continua na lista).

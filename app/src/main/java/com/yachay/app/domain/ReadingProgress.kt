@@ -8,6 +8,9 @@ object ReadingProgress {
     /** Considera o livro concluído a partir deste ponto (EPUBs raramente chegam a 1.0 exato). */
     const val DONE_THRESHOLD = 0.995f
 
+    /** PDF e CBZ: página atual (0-based) sobre o total, contando a página visível como lida. */
+    fun forPages(pageIndex: Int, pageCount: Int): Float = forPdf(pageIndex, pageCount)
+
     /** PDF: página atual (0-based) sobre o total, contando a página visível como lida. */
     fun forPdf(pageIndex: Int, pageCount: Int): Float {
         if (pageCount <= 0) return 0f

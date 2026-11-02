@@ -18,6 +18,9 @@ data object ProfileRoute
 @Serializable
 data class CollectionDetailRoute(val collectionId: Long)
 
-/** EPUB não tem rota: abre na EpubReaderActivity (ver ui/reader/BookOpener.kt). */
+/**
+ * Leitor de páginas (PDF e CBZ). EPUB não tem rota: abre na EpubReaderActivity
+ * (ver ui/reader/BookOpener.kt).
+ */
 @Serializable
 data class PdfReaderRoute(val bookId: Long)

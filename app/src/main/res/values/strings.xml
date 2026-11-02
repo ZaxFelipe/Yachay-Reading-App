@@ -32,9 +32,25 @@
         <item quantity="other">%d lidos</item>
     </plurals>
     <string name="library_empty_title">Sua estante está vazia</string>
-    <string name="library_empty_body">Toque em + para adicionar PDFs e EPUBs do seu dispositivo.</string>
+    <string name="library_empty_body">Toque em + para adicionar PDFs, EPUBs e quadrinhos (CBZ) do seu dispositivo.</string>
     <string name="library_collection_empty">Nenhum livro nesta coleção ainda.</string>
     <string name="library_importing">Importando…</string>
+    <string name="library_search">Buscar na biblioteca</string>
+    <string name="library_search_close">Fechar busca</string>
+    <string name="library_search_hint">Título ou autor</string>
+    <plurals name="library_search_results">
+        <item quantity="one">%d resultado</item>
+        <item quantity="other">%d resultados</item>
+    </plurals>
+    <string name="library_search_empty">Nenhum livro com “%1$s”</string>
+    <string name="library_search_empty_body">A busca olha o título e o autor, sem ligar para acentos.</string>
+    <string name="library_sort">Ordenar</string>
+    <string name="sort_added">Adicionados recentemente</string>
+    <string name="sort_opened">Abertos recentemente</string>
+    <string name="sort_title">Título (A–Z)</string>
+    <string name="sort_author">Autor (A–Z)</string>
+    <string name="sort_progress">Progresso (mais lidos primeiro)</string>
+    <string name="library_summary_streak">%1$s · %2$d dias seguidos</string>
     <plurals name="import_added">
         <item quantity="one">%d livro adicionado</item>
         <item quantity="other">%d livros adicionados</item>
@@ -101,6 +117,11 @@
     <string name="theme_night">Noturno</string>
     <string name="theme_night_desc">Página roxo-noite, texto creme. Cansa menos a vista no escuro.</string>
     <string name="settings_sample_text">Capitu tinha olhos de cigana oblíqua e dissimulada.</string>
+    <string name="settings_daily_goal">Meta diária</string>
+    <string name="settings_daily_goal_body">Páginas por dia, somando todos os livros. Cada meta batida vale %1$d XP por página da meta.</string>
+    <string name="settings_daily_goal_pages">págs</string>
+    <string name="settings_daily_goal_xp">%1$d XP</string>
+    <string name="settings_daily_goal_option">%1$d páginas por dia, %2$d XP</string>
     <string name="settings_reading_text">Texto dos EPUBs</string>
     <string name="settings_reading_text_body">Vale para todos os EPUBs. Também dá para ajustar lendo, no botão Aa.</string>
 
@@ -108,10 +129,33 @@
     <string name="reader_loading">Abrindo livro…</string>
     <string name="reader_error_title">Ops!</string>
     <string name="reader_page_of">%1$d / %2$d</string>
+    <!-- Busca no livro -->
+    <string name="search_open">Buscar no livro</string>
+    <string name="search_hint">Palavra ou frase</string>
+    <string name="search_running">Buscando…</string>
+    <string name="search_empty">Nada encontrado para “%1$s”</string>
+    <plurals name="search_results">
+        <item quantity="one">%d resultado</item>
+        <item quantity="other">%d resultados</item>
+    </plurals>
+    <!-- Marcadores e destaques -->
+    <string name="bookmark_add">Marcar página</string>
+    <string name="annotation_remove_bookmark">Remover marcador</string>
+    <string name="annotation_remove_highlight">Remover destaque</string>
+    <string name="annotations_open">Marcadores e destaques</string>
+    <string name="annotations_bookmarks">Marcadores</string>
+    <string name="annotations_highlights">Destaques</string>
+    <string name="annotations_bookmarks_empty">Nenhum marcador ainda. Toque no marcador na barra para guardar a página atual.</string>
+    <string name="annotations_highlights_empty">Nenhum destaque ainda. Selecione um trecho e toque em Destacar.</string>
+    <string name="annotation_page">Página %1$d</string>
+    <string name="annotation_chapter_percent">%1$s · %2$d%%</string>
+    <string name="annotation_chapter_number">Capítulo %1$d</string>
+    <string name="highlight_action">Destacar</string>
     <!-- Meta diária -->
     <string name="daily_goal_description">Meta do dia: %1$d de %2$d páginas</string>
     <string name="daily_goal_done">Meta batida! %1$d páginas hoje</string>
     <string name="daily_goal_level_up">Meta batida! Nível %1$d: avatar novo</string>
+    <string name="daily_goal_streak">Meta batida! %1$d dias seguidos</string>
     <string name="daily_goal_almost_there">Quase lá! %1$d de %2$d páginas hoje</string>
     <string name="reader_text_settings">Ajustes de texto</string>
     <string name="reader_font_size">Tamanho da fonte</string>
@@ -119,7 +163,20 @@
     <string name="reader_font_increase">Aumentar fonte</string>
     <string name="reader_font_scale_value">%d%%</string>
     <string name="reader_line_spacing">Espaçamento entre linhas</string>
-    <string name="reader_line_spacing_note">Compacto e Amplo trocam o estilo do livro pelo do Yachay.</string>
+    <string name="reader_publisher_styles_note">Espaçamento e alinhamento diferentes do livro trocam o estilo da editora pelo do Yachay.</string>
+    <string name="reader_font_family">Fonte</string>
+    <string name="reader_font_publisher">Do livro</string>
+    <string name="reader_font_serif">Serifada</string>
+    <string name="reader_font_sans">Sem serifa</string>
+    <string name="reader_font_legible">Legível</string>
+    <string name="reader_margins">Margens</string>
+    <string name="reader_margins_narrow">Estreita</string>
+    <string name="reader_margins_normal">Normal</string>
+    <string name="reader_margins_wide">Larga</string>
+    <string name="reader_align">Alinhamento</string>
+    <string name="reader_align_publisher">Do livro</string>
+    <string name="reader_align_left">Esquerda</string>
+    <string name="reader_align_justify">Justificado</string>
     <string name="line_spacing_compact">Compacto</string>
     <string name="line_spacing_normal">Normal</string>
     <string name="line_spacing_wide">Amplo</string>
@@ -145,7 +202,22 @@
         <item quantity="one">meta batida</item>
         <item quantity="other">metas batidas</item>
     </plurals>
-    <string name="profile_pages_note">Somando todos os livros. Cada página conta uma vez por dia, depois de 3 s nela. Cada meta batida vale 100 XP.</string>
+    <plurals name="profile_streak">
+        <item quantity="one">dia seguido</item>
+        <item quantity="other">dias seguidos</item>
+    </plurals>
+    <string name="profile_streak_best">Recorde: %1$d</string>
+    <string name="profile_pages_note">Somando todos os livros. Cada página conta uma vez por dia, depois de 3 s nela. Cada meta vale 10 XP por página da meta; a cada 7 dias seguidos, +100 XP.</string>
+    <string name="profile_calendar">Calendário</string>
+    <string name="calendar_day">%1$s · %2$s</string>
+    <string name="calendar_day_goal_met">%1$s · %2$s · meta batida</string>
+    <string name="calendar_no_reading">sem leitura</string>
+    <plurals name="calendar_pages">
+        <item quantity="one">%d página</item>
+        <item quantity="other">%d páginas</item>
+    </plurals>
+    <string name="calendar_less">Menos</string>
+    <string name="calendar_more">Mais</string>
     <string name="profile_avatars">Avatares</string>
     <string name="profile_avatars_hint">Toque num avatar desbloqueado para usá-lo. Ao desbloquear um novo, ele vira sua foto.</string>
     <string name="profile_avatar_in_use">Em uso</string>

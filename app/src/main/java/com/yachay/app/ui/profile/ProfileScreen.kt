@@ -40,6 +40,8 @@ import com.yachay.app.AppContainer
 import com.yachay.app.R
 import com.yachay.app.appContainer
 import com.yachay.app.data.db.BookEntity
+import com.yachay.app.domain.CalendarDay
+import com.yachay.app.domain.CalendarGrid
 import com.yachay.app.domain.ReaderLevel
 import com.yachay.app.domain.ReaderStats
 import com.yachay.app.ui.collections.BookActionsSheet
@@ -63,11 +65,16 @@ import com.yachay.app.ui.theme.Purple
 import com.yachay.app.ui.theme.paperGrain
 import com.yachay.app.ui.theme.shadeFor
 import com.yachay.app.ui.theme.tabular
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class ProfileViewModel(container: AppContainer) : ViewModel() {
 
     private val dailyGoal = container.dailyGoal
@@ -79,7 +86,19 @@ class ProfileViewModel(container: AppContainer) : ViewModel() {
 
     val recentBooks: StateFlow<List<BookEntity>> = container.bookRepository.observeRecentlyOpened()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** "Hoje" fixado ao abrir a tela (virar a meia-noite com o Perfil aberto não redesenha). */
+    val today: LocalDate = LocalDate.now()
+
+    val calendar: StateFlow<CalendarState> = container.readingHistory.firstDay
+        .flatMapLatest { first ->
+            val weeks = CalendarGrid.weeks(today, first)
+            container.readingHistory.observe(weeks.first().first(), today).map { CalendarState(weeks, it) }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CalendarState(CalendarGrid.weeks(today, null), emptyMap()))
 }
+
+data class CalendarState(val weeks: List<List<LocalDate>>, val days: Map<LocalDate, CalendarDay>)
 
 /** Pergunta da tela: "como estou indo?". Responde com o avatar, o nível e a barra de XP. */
 @Composable
@@ -88,6 +107,7 @@ fun ProfileScreen(onBack: () -> Unit, onOpenPdf: (Long) -> Unit) {
     val viewModel = viewModel { ProfileViewModel(context.appContainer) }
     val stats by viewModel.stats.collectAsStateWithLifecycle()
     val recent by viewModel.recentBooks.collectAsStateWithLifecycle()
+    val calendar by viewModel.calendar.collectAsStateWithLifecycle()
     val openBook = rememberBookOpener(onOpenPdf)
     var actionsFor by remember { mutableStateOf<BookEntity?>(null) }
 
@@ -130,12 +150,22 @@ fun ProfileScreen(onBack: () -> Unit, onOpenPdf: (Long) -> Unit) {
                     label = pluralStringResource(R.plurals.profile_goals_met, pluralQuantity(stats.goalsMet)),
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                 )
+                StatCard(
+                    value = stats.streak,
+                    prefix = "🔥 ",
+                    label = pluralStringResource(R.plurals.profile_streak, pluralQuantity(stats.streak)),
+                    footnote = stringResource(R.string.profile_streak_best, stats.bestStreak),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                )
             }
             Text(
                 stringResource(R.string.profile_pages_note),
                 style = MaterialTheme.typography.bodySmall,
                 color = CreamMuted,
             )
+
+            SectionHeader(stringResource(R.string.profile_calendar), modifier = Modifier.padding(top = 20.dp))
+            ReadingCalendar(weeks = calendar.weeks, days = calendar.days, today = viewModel.today)
 
             SectionHeader(
                 stringResource(R.string.profile_avatars),
@@ -224,11 +254,20 @@ private fun LevelCard(stats: ReaderStats) {
 private fun pluralQuantity(count: Int): Int = if (count == 0) 2 else count
 
 @Composable
-private fun StatCard(value: Int, label: String, modifier: Modifier = Modifier) {
+private fun StatCard(
+    value: Int,
+    label: String,
+    modifier: Modifier = Modifier,
+    prefix: String = "",
+    footnote: String? = null,
+) {
     NeoSurface(modifier = modifier, color = Cream) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(value.toString(), style = MaterialTheme.typography.headlineMedium.tabular(), color = Ink)
+            Text("$prefix$value", style = MaterialTheme.typography.headlineMedium.tabular(), color = Ink)
             Text(label, style = MaterialTheme.typography.bodyMedium, color = InkMuted)
+            if (footnote != null) {
+                Text(footnote, style = MaterialTheme.typography.labelSmall.tabular(), color = InkMuted)
+            }
         }
     }
 }

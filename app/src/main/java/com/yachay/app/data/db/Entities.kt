@@ -71,3 +71,39 @@ data class CollectionWithCount(
     @Embedded val collection: CollectionEntity,
     val bookCount: Int,
 )
+
+enum class AnnotationType { BOOKMARK, HIGHLIGHT }
+
+/**
+ * Marcador (PDF e EPUB) ou destaque (só EPUB). [position] segue o formato de
+ * [BookEntity.lastPosition]: índice da página no PDF, `Locator.toJSON()` no EPUB.
+ */
+@Entity(
+    tableName = "annotations",
+    indices = [Index("bookId")],
+    foreignKeys = [
+        ForeignKey(
+            entity = BookEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["bookId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
+data class AnnotationEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val bookId: Long,
+    val type: AnnotationType,
+    val position: String,
+    /** Trecho grifado (destaques). */
+    val text: String? = null,
+    val createdAt: Long,
+)
+
+/** Páginas lidas num dia (histórico do calendário do Perfil). [date] em ISO (`2026-11-02`). */
+@Entity(tableName = "reading_days")
+data class ReadingDayEntity(
+    @PrimaryKey val date: String,
+    val pages: Int,
+    val goalMet: Boolean,
+)

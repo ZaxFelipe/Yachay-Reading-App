@@ -71,4 +71,39 @@ class DailyGoalTest {
         assertEquals(today, day.date)
         assertEquals(1, DailyGoal.pagesOn(day, today))
     }
+
+    @Test
+    fun `almost there and target work for every option`() {
+        assertEquals(listOf(3, 6, 12, 18), DailyGoal.TARGETS.map(DailyGoal::almostThereAt))
+        assertTrue(DailyGoal.crossesAlmostThere(2, 3, 5))
+        assertTrue(DailyGoal.crossesAlmostThere(11, 12, 20))
+        assertTrue(DailyGoal.crossesAlmostThere(17, 18, 30))
+        assertTrue(DailyGoal.reachesTarget(4, 5, 5))
+        assertTrue(DailyGoal.reachesTarget(19, 20, 20))
+        assertFalse(DailyGoal.reachesTarget(20, 21, 20))
+        assertTrue(DailyGoal.reachesTarget(29, 30, 30))
+    }
+
+    @Test
+    fun `xp is proportional to the target`() {
+        assertEquals(listOf(50, 100, 200, 300), DailyGoal.TARGETS.map(DailyGoal::xpFor))
+    }
+
+    @Test
+    fun `invalid stored target falls back to default`() {
+        assertEquals(10, DailyGoal.sanitizeTarget(null))
+        assertEquals(10, DailyGoal.sanitizeTarget(7))
+        assertEquals(20, DailyGoal.sanitizeTarget(20))
+    }
+
+    @Test
+    fun `segments group pages above ten`() {
+        assertEquals(listOf(5, 10, 10, 10), DailyGoal.TARGETS.map(DailyGoal::segments))
+        assertEquals(listOf(1, 1, 2, 3), DailyGoal.TARGETS.map(DailyGoal::pagesPerSegment))
+        // 30 páginas: 3 por setor, só setores completos pintam.
+        assertEquals(0, DailyGoal.filledSegments(2, 30))
+        assertEquals(1, DailyGoal.filledSegments(3, 30))
+        assertEquals(10, DailyGoal.filledSegments(40, 30))
+        assertEquals(3, DailyGoal.filledSegments(3, 5))
+    }
 }

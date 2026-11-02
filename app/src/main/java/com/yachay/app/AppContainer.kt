@@ -3,6 +3,8 @@ package com.yachay.app
 import android.content.Context
 import com.yachay.app.data.db.YachayDatabase
 import com.yachay.app.data.goals.DailyGoalRepository
+import com.yachay.app.data.goals.ReadingHistoryRepository
+import com.yachay.app.data.repo.AnnotationRepository
 import com.yachay.app.data.goals.dailyGoalStore
 import com.yachay.app.data.importer.BookImporter
 import com.yachay.app.data.importer.CoverStore
@@ -36,7 +38,11 @@ class AppContainer(context: Context) {
 
     val settings = SettingsRepository(context.settingsStore)
 
-    val dailyGoal = DailyGoalRepository(context.dailyGoalStore)
+    val readingHistory = ReadingHistoryRepository(database.readingDayDao())
+
+    val dailyGoal = DailyGoalRepository(context.dailyGoalStore, history = readingHistory::record)
+
+    val annotations = AnnotationRepository(database.annotationDao())
 
     val epubSessions = EpubSessions(readium, settings)
 }

@@ -34,4 +34,14 @@ class ReaderLevelTest {
         assertEquals(0, stats.goalsToNextLevel)
         assertFalse(ReaderStats(goalsMet = 119).isMaxLevel)
     }
+
+    @Test
+    fun `level comes from the stored xp, not from the goal count`() {
+        // 2 metas de 20 páginas (400 XP) valem o mesmo que 4 metas de 10.
+        val stats = ReaderStats(goalsMet = 2, xp = 400, goalTarget = 20)
+        assertEquals(3, stats.level)
+        // Faltam 200 XP para o nível 4: uma meta de 20 páginas.
+        assertEquals(1, stats.goalsToNextLevel)
+        assertEquals(4, ReaderStats(goalsMet = 2, xp = 400, goalTarget = 5).goalsToNextLevel)
+    }
 }

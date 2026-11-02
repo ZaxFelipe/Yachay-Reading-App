@@ -38,11 +38,12 @@ import com.yachay.app.ui.theme.tabular
 /**
  * Aviso da meta do dia: "Quase lá!" (creme, discreto) ao passar de 60% e "Meta batida!" (limão,
  * o destaque) ao completar — com o nível novo quando a meta desbloqueou um avatar
- * ([unlockedLevel]). O texto segue [progress]. Fica num [Popup] logo abaixo de onde é
+ * ([unlockedLevel]) ou a sequência quando ela chegou a um múltiplo de 7 ([streakBonus]);
+ * o avatar tem prioridade. O texto segue [progress]. Fica num [Popup] logo abaixo de onde é
  * chamado (a barra do leitor), para não empurrar o layout da página.
  */
 @Composable
-fun DailyGoalNotice(visible: Boolean, progress: DailyGoalProgress, unlockedLevel: Int? = null) {
+fun DailyGoalNotice(visible: Boolean, progress: DailyGoalProgress, unlockedLevel: Int? = null, streakBonus: Int? = null) {
     val state = remember { MutableTransitionState(false) }
     state.targetState = visible
     // O popup só existe enquanto aparece ou some (a animação de saída precisa dele).
@@ -82,6 +83,8 @@ fun DailyGoalNotice(visible: Boolean, progress: DailyGoalProgress, unlockedLevel
                 Text(
                     if (done && unlockedLevel != null) {
                         stringResource(R.string.daily_goal_level_up, unlockedLevel)
+                    } else if (done && streakBonus != null) {
+                        stringResource(R.string.daily_goal_streak, streakBonus)
                     } else if (done) {
                         stringResource(R.string.daily_goal_done, progress.pagesRead)
                     } else {

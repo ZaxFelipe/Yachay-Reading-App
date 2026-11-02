@@ -24,8 +24,10 @@ import com.yachay.app.R
 import com.yachay.app.domain.LineSpacing
 import com.yachay.app.domain.ReaderPreferences
 import com.yachay.app.domain.ReadingTheme
-import com.yachay.app.ui.reader.FontScaleStepper
-import com.yachay.app.ui.reader.LineSpacingChips
+import com.yachay.app.domain.PageMargins
+import com.yachay.app.domain.ReaderFont
+import com.yachay.app.domain.TextAlignment
+import com.yachay.app.ui.reader.EpubTextControls
 import com.yachay.app.ui.reader.ReadingThemeChips
 import com.yachay.app.ui.theme.Cream
 import com.yachay.app.ui.theme.Ink
@@ -42,6 +44,9 @@ fun ReaderSettingsSheet(
     preferences: ReaderPreferences,
     onFontScale: (Float) -> Unit,
     onLineSpacing: (LineSpacing) -> Unit,
+    onFont: (ReaderFont) -> Unit,
+    onMargins: (PageMargins) -> Unit,
+    onTextAlign: (TextAlignment) -> Unit,
     onTheme: (ReadingTheme) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -69,16 +74,15 @@ fun ReaderSettingsSheet(
                 .padding(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(stringResource(R.string.reader_font_size), style = MaterialTheme.typography.titleMedium)
-            FontScaleStepper(preferences.fontScale, onFontScale)
-
-            Text(
-                stringResource(R.string.reader_line_spacing),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(top = 8.dp),
+            EpubTextControls(
+                preferences = preferences,
+                onFontScale = onFontScale,
+                onLineSpacing = onLineSpacing,
+                onFont = onFont,
+                onMargins = onMargins,
+                onTextAlign = onTextAlign,
+                noteColor = InkMuted,
             )
-            LineSpacingChips(preferences.lineSpacing, onLineSpacing)
-            Text(stringResource(R.string.reader_line_spacing_note), style = MaterialTheme.typography.bodySmall, color = InkMuted)
 
             Text(
                 stringResource(R.string.settings_reading_theme),

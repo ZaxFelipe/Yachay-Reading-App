@@ -195,7 +195,7 @@ fun BookStatus(book: BookEntity, modifier: Modifier = Modifier) {
 @Composable
 private fun formatMeta(book: BookEntity): String {
     val pages = book.totalPages
-    return if (book.format == BookFormat.PDF && pages != null) {
+    return if (book.format.isPaged && pages != null) {
         stringResource(R.string.book_meta_pages, book.format.name, pages)
     } else {
         book.format.name
@@ -211,7 +211,7 @@ fun positionLabel(book: BookEntity): String {
     val pages = book.totalPages
     val page = book.lastPosition?.toIntOrNull()
     val current = currentFraction(book)
-    val base = if (book.format == BookFormat.PDF && pages != null && page != null) {
+    val base = if (book.format.isPaged && pages != null && page != null) {
         val number = page + 1
         val left = pages - number
         if (left > 0) {
@@ -236,7 +236,7 @@ fun positionLabel(book: BookEntity): String {
 private fun currentFraction(book: BookEntity): Float? {
     val position = book.lastPosition ?: return null
     return when (book.format) {
-        BookFormat.PDF -> {
+        BookFormat.PDF, BookFormat.CBZ -> {
             val pages = book.totalPages ?: return null
             position.toIntOrNull()?.let { ReadingProgress.forPdf(it, pages) }
         }

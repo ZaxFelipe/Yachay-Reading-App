@@ -8,6 +8,7 @@ import com.yachay.app.data.db.BookEntity
 import com.yachay.app.data.db.CollectionWithCount
 import com.yachay.app.data.importer.ImportResult
 import com.yachay.app.domain.DailyGoalProgress
+import com.yachay.app.domain.LibrarySort
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -34,7 +35,14 @@ data class LibraryUiState(
     val goal: DailyGoalProgress = DailyGoalProgress(0),
     /** Avatar do botão de perfil (o escolhido ou o do nível). */
     val avatar: Int = 1,
+    /** Dias seguidos batendo a meta (no subtítulo a partir de 2). */
+    val streak: Int = 0,
+    val sort: LibrarySort = LibrarySort.Default,
+    /** null = busca fechada; "" = aberta sem texto. */
+    val query: String? = null,
 ) {
+    val searching: Boolean get() = query != null
+
     val selectedCollection: CollectionWithCount?
         get() = collections.firstOrNull { it.collection.id == selectedCollectionId }
 }
@@ -49,6 +57,8 @@ class LibraryViewModel(container: AppContainer) : ViewModel() {
 
     private val selectedCollectionId = MutableStateFlow<Long?>(null)
     private val importing = MutableStateFlow(false)
+    private val query = MutableStateFlow<String?>(null)
+    private val settings = container.settings
 
     private val _importResults = Channel<ImportResult>(Channel.BUFFERED)
     val importResults: Flow<ImportResult> = _importResults.receiveAsFlow()
@@ -80,15 +90,38 @@ class LibraryViewModel(container: AppContainer) : ViewModel() {
         )
     }
 
-    // combine só aceita 5 fluxos tipados: meta e nível entram num segundo passo.
-    val state = combine(baseState, dailyGoal.progress, dailyGoal.stats) { base, goal, stats ->
-        base.copy(goal = goal, avatar = stats.avatar)
+    // combine só aceita 5 fluxos tipados: meta, nível, busca e ordem entram num segundo passo.
+    // Busca e ordem valem sobre a estante já filtrada pela coleção (listas pequenas: em memória).
+    val state = combine(baseState, dailyGoal.progress, dailyGoal.stats, query, settings.librarySort) { base, goal, stats, q, sort ->
+        base.copy(
+            books = sortBooks(base.books.filter { matches(it, q.orEmpty()) }, sort),
+            goal = goal,
+            avatar = stats.avatar,
+            streak = stats.streak,
+            sort = sort,
+            query = q,
+        )
     }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
 
     fun selectCollection(id: Long?) {
         selectedCollectionId.value = id
     }
+
+    fun openSearch() {
+        if (query.value == null) query.value = ""
+    }
+
+    fun setQuery(text: String) {
+        query.value = text
+    }
+
+    /** Fechar a busca limpa o texto. */
+    fun closeSearch() {
+        query.value = null
+    }
+
+    fun setSort(sort: LibrarySort) = viewModelScope.launch { settings.setLibrarySort(sort) }
 
     fun import(uris: List<Uri>) {
         if (uris.isEmpty()) return

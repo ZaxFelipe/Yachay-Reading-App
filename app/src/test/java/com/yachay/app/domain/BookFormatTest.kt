@@ -2,6 +2,7 @@ package com.yachay.app.domain
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BookFormatTest {
@@ -27,6 +28,20 @@ class BookFormatTest {
 
     @Test
     fun `picker mime types cover every format`() {
-        assertEquals(setOf("application/pdf", "application/epub+zip"), BookFormat.pickerMimeTypes.toSet())
+        val mimes = BookFormat.pickerMimeTypes.toSet()
+        BookFormat.entries.forEach { assertTrue(it.name, mimes.containsAll(it.mimeTypes)) }
+        // CBZ costuma chegar como ZIP/binário genérico: precisa aparecer no seletor.
+        assertTrue(mimes.contains("application/zip"))
+    }
+
+    @Test
+    fun `detects cbz by mime or by extension`() {
+        assertEquals(BookFormat.CBZ, BookFormat.detect("application/vnd.comicbook+zip", null))
+        assertEquals(BookFormat.CBZ, BookFormat.detect("application/x-cbz", "x"))
+        assertEquals(BookFormat.CBZ, BookFormat.detect("application/octet-stream", "Turma.CBZ"))
+        assertEquals(BookFormat.CBZ, BookFormat.detect("application/zip", "mangá vol 1.cbz"))
+        // ZIP qualquer não vira livro.
+        assertNull(BookFormat.detect("application/zip", "fotos.zip"))
+        assertTrue(BookFormat.CBZ.isPaged)
     }
 }

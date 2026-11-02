@@ -1,5 +1,6 @@
 package com.yachay.app.ui.components
 
+import com.yachay.app.domain.DailyGoal
 import com.yachay.app.domain.DailyGoalProgress
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -53,6 +54,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -229,6 +231,8 @@ fun NeoChip(
     modifier: Modifier = Modifier,
     // Seleção em limão (o destaque das referências); não selecionado em roxo profundo.
     selectedColor: Color = Lime,
+    /** Fonte do rótulo (ex.: chips de fonte do EPUB escritos na própria fonte). */
+    fontFamily: FontFamily? = null,
 ) {
     NeoPressable(
         onClick = onClick,
@@ -239,7 +243,7 @@ fun NeoChip(
     ) {
         Text(
             label,
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.labelLarge.let { if (fontFamily != null) it.copy(fontFamily = fontFamily) else it },
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -320,18 +324,20 @@ private fun ProgressTrack(animated: Float, fill: Color, height: Dp) {
 }
 
 /**
- * Meta do dia em setores: um por página da meta (10), preenchidos em limão conforme a
- * leitura. Fica sobre os campos roxos (barras e "Lendo agora"), onde o limão é o destaque.
+ * Meta do dia em setores: um por página da meta (acima de 10 páginas, um por grupo — ver
+ * [DailyGoal.pagesPerSegment]), preenchidos em limão conforme a leitura. Fica sobre os
+ * campos roxos (barras e "Lendo agora"), onde o limão é o destaque.
  */
 @Composable
 private fun DailyGoalSegments(goal: DailyGoalProgress, modifier: Modifier = Modifier) {
     val description = stringResource(R.string.daily_goal_description, goal.pagesRead, goal.target)
+    val filledCount = DailyGoal.filledSegments(goal.pagesRead, goal.target)
     Row(
         modifier.clearAndSetSemantics { contentDescription = description },
         horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        repeat(goal.target) { index ->
-            val filled = index < goal.pagesRead
+        repeat(DailyGoal.segments(goal.target)) { index ->
+            val filled = index < filledCount
             val color by animateColorAsState(if (filled) Lime else Paper, label = "goalSegment")
             Box(
                 Modifier
@@ -360,6 +366,11 @@ fun NeoTopBar(
     bottom: (@Composable () -> Unit)? = null,
     /** Pontos no canto superior direito, no tom escuro da própria barra (como em ref1). */
     halftone: Halftone? = Halftone(shadeFor(color), Alignment.TopEnd, spacing = 9.dp, maxDot = 3.5.dp, reach = 0.5f),
+    /**
+     * Título numa linha própria, abaixo de voltar + ações: para barras com muitas ações
+     * (leitor de EPUB), em que o título ao lado ficaria espremido.
+     */
+    stackTitle: Boolean = false,
 ) {
     Column(
         modifier
@@ -379,14 +390,22 @@ fun NeoTopBar(
                     navigationIcon()
                     Spacer(Modifier.width(12.dp))
                 }
-                Text(
-                    title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
+                if (stackTitle) {
+                    Spacer(Modifier.weight(1f))
+                } else {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp), content = actions)
+            }
+            if (stackTitle) {
+                Spacer(Modifier.height(8.dp))
+                Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (bottom != null) {
                 Spacer(Modifier.height(10.dp))
@@ -522,8 +541,17 @@ fun NeoEmptyState(
 
 /** Título de seção com uma contagem opcional alinhada à direita (algarismos tabulares). */
 @Composable
-fun SectionHeader(title: String, modifier: Modifier = Modifier, count: Int? = null) {
-    Row(modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.Bottom) {
+fun SectionHeader(
+    title: String,
+    modifier: Modifier = Modifier,
+    count: Int? = null,
+    /** Botão à direita (ex.: ordenar a estante). */
+    action: (@Composable () -> Unit)? = null,
+) {
+    Row(
+        modifier.fillMaxWidth().padding(top = 8.dp),
+        verticalAlignment = if (action != null) Alignment.CenterVertically else Alignment.Bottom,
+    ) {
         // O Box ocupa a largura; o Text fica do tamanho das palavras para o marca-texto acompanhar.
         Box(Modifier.weight(1f)) {
             Text(
@@ -540,6 +568,10 @@ fun SectionHeader(title: String, modifier: Modifier = Modifier, count: Int? = nu
                 style = MaterialTheme.typography.titleMedium.tabular(),
                 color = CreamMuted,
             )
+        }
+        if (action != null) {
+            Spacer(Modifier.width(12.dp))
+            action()
         }
     }
 }

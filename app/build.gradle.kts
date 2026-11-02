@@ -16,8 +16,8 @@ android {
         applicationId = "com.yachay.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 4
+        versionName = "0.4.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -79,6 +79,8 @@ android {
 
 ksp {
     arg("room.generateKotlin", "true")
+    // Schemas versionados em app/schemas: base do teste das migrações.
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
@@ -114,4 +116,6 @@ dependencies {
     implementation(libs.readium.navigator)
 
     testImplementation(libs.junit)
+    // SQLite na JVM: roda a SQL das migrações contra os schemas exportados.
+    testImplementation(libs.sqlite.jdbc)
 }

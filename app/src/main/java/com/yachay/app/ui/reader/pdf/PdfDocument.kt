@@ -5,8 +5,11 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
+import android.os.Build
 import android.os.ParcelFileDescriptor
+import androidx.annotation.RequiresApi
 import android.util.LruCache
+import com.yachay.app.ui.reader.PageSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -19,9 +22,8 @@ import kotlinx.coroutines.withContext
 class PdfDocument private constructor(
     private val descriptor: ParcelFileDescriptor,
     private val renderer: PdfRenderer,
-    /** largura/altura de cada página, para reservar o espaço antes de renderizar. */
-    val pageAspectRatios: List<Float>,
-) {
+    override val pageAspectRatios: List<Float>,
+) : PageSource {
     private val mutex = Mutex()
     private var closed = false
 
@@ -29,18 +31,16 @@ class PdfDocument private constructor(
         override fun sizeOf(key: Int, value: Bitmap): Int = value.byteCount
     }
 
-    val pageCount: Int get() = pageAspectRatios.size
-
     /**
      * Maior largura de re-render (zoom) para a página: um bitmap nunca passa de 1/10 do heap,
      * nem de [PdfZoom.MAX_RENDER_WIDTH_PX]. Evita OutOfMemoryError ampliando 5×.
      */
-    fun maxRenderWidth(index: Int): Int = minOf(
+    override fun maxRenderWidth(index: Int): Int = minOf(
         PdfZoom.MAX_RENDER_WIDTH_PX,
         PdfZoom.memoryCapWidth(Runtime.getRuntime().maxMemory() / 10, pageAspectRatios[index]),
     )
 
-    suspend fun render(index: Int, widthPx: Int): Bitmap? = withContext(Dispatchers.IO) {
+    override suspend fun render(index: Int, widthPx: Int): Bitmap? = withContext(Dispatchers.IO) {
         mutex.withLock {
             if (closed) return@withLock null
             cache.get(index)?.takeIf { it.width == widthPx }?.let { return@withLock it }
@@ -55,7 +55,16 @@ class PdfDocument private constructor(
         }
     }
 
-    suspend fun close() = mutex.withLock {
+    /** Texto da página (só Android 15+, quando o PdfRenderer passou a expor o texto). */
+    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
+    suspend fun pageText(index: Int): String = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            if (closed) return@withLock ""
+            renderer.openPage(index).use { page -> page.textContents.joinToString("\n") { it.text } }
+        }
+    }
+
+    override suspend fun close() = mutex.withLock {
         if (closed) return@withLock
         closed = true
         cache.evictAll()
@@ -64,6 +73,9 @@ class PdfDocument private constructor(
     }
 
     companion object {
+        /** Busca no PDF depende do texto do PdfRenderer, que só existe no Android 15+. */
+        val supportsSearch: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM
+
         suspend fun open(context: Context, uri: Uri): PdfDocument? = withContext(Dispatchers.IO) {
             runCatching {
                 val descriptor = context.contentResolver.openFileDescriptor(uri, "r") ?: return@runCatching null

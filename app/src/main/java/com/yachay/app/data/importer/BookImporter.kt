@@ -10,6 +10,7 @@ import android.provider.OpenableColumns
 import com.yachay.app.data.db.BookDao
 import com.yachay.app.data.db.BookEntity
 import com.yachay.app.domain.BookFormat
+import com.yachay.app.ui.reader.cbz.CbzDocument
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.readium.r2.shared.publication.services.cover
@@ -60,6 +61,7 @@ class BookImporter(
         val extracted = when (format) {
             BookFormat.PDF -> extractPdf(uri, fallbackTitle)
             BookFormat.EPUB -> extractEpub(uri, fallbackTitle)
+            BookFormat.CBZ -> extractCbz(uri, fallbackTitle)
         } ?: return Outcome.FAILED
 
         val id = dao.insert(
@@ -110,6 +112,16 @@ class BookImporter(
             )
         } finally {
             publication.close()
+        }
+    }
+
+    /** Capa = primeira imagem; arquivo sem imagens (ou que não é ZIP) falha a importação. */
+    private suspend fun extractCbz(uri: Uri, fallbackTitle: String): Extracted? {
+        val document = CbzDocument.open(readium, uri) ?: return null
+        return try {
+            Extracted(fallbackTitle, author = null, totalPages = document.pageCount, cover = CbzDocument.cover(document, COVER_RENDER_WIDTH))
+        } finally {
+            document.close()
         }
     }
 

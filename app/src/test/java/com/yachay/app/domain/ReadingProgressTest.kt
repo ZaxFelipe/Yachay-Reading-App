@@ -57,4 +57,11 @@ class ReadingProgressTest {
         assertFalse(ReadingProgress.isDone(0.99f))
         assertTrue(ReadingProgress.isDone(1f))
     }
+
+    @Test
+    fun `cbz pages count like pdf pages`() {
+        (0 until 30).forEach { assertEquals(ReadingProgress.forPdf(it, 30), ReadingProgress.forPages(it, 30), 0f) }
+        assertTrue(ReadingProgress.isDone(ReadingProgress.forPages(pageIndex = 23, pageCount = 24)))
+        assertEquals(0f, ReadingProgress.forPages(0, 0), 0f)
+    }
 }

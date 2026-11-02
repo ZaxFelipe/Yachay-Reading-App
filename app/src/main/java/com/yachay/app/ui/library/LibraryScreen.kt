@@ -1,7 +1,27 @@
 package com.yachay.app.ui.library
 
 import android.content.res.Resources
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import com.yachay.app.domain.LibrarySort
+import com.yachay.app.ui.components.NeoIconButton
+import com.yachay.app.ui.components.NeoPressable
+import com.yachay.app.ui.components.NeoSheet
+import com.yachay.app.ui.components.NeoTextField
+import com.yachay.app.ui.components.YachayIcons
+import com.yachay.app.ui.theme.Paper
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -71,6 +91,10 @@ fun LibraryScreen(onOpenPdf: (Long) -> Unit, onOpenProfile: () -> Unit) {
     val openBook = rememberBookOpener(onOpenPdf)
     val snackbar = remember { SnackbarHostState() }
     var actionsFor by remember { mutableStateOf<BookEntity?>(null) }
+    var showSort by remember { mutableStateOf(false) }
+
+    // Voltar fecha a busca (e limpa o texto) antes de sair da tela.
+    BackHandler(enabled = state.searching) { viewModel.closeSearch() }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         viewModel.import(uris)
@@ -92,11 +116,44 @@ fun LibraryScreen(onOpenPdf: (Long) -> Unit, onOpenProfile: () -> Unit) {
                 title = stringResource(R.string.app_name),
                 navigationIcon = { ProfileButton(avatar = state.avatar, onClick = onOpenProfile) },
                 actions = {
-                    Sparkle(Modifier.padding(end = 4.dp), extent = 24.dp, color = Lime, outline = Ink)
+                    if (state.searching) {
+                        NeoIconButton(
+                            Icons.Filled.Close,
+                            contentDescription = stringResource(R.string.library_search_close),
+                            onClick = viewModel::closeSearch,
+                        )
+                    } else {
+                        if (state.allBooks.isNotEmpty()) {
+                            NeoIconButton(
+                                Icons.Filled.Search,
+                                contentDescription = stringResource(R.string.library_search),
+                                onClick = viewModel::openSearch,
+                            )
+                        }
+                        Sparkle(Modifier.padding(start = 4.dp, end = 4.dp), extent = 24.dp, color = Lime, outline = Ink)
+                    }
                 },
                 bottom = {
+                    if (state.searching) {
+                        val focus = remember { FocusRequester() }
+                        NeoTextField(
+                            value = state.query.orEmpty(),
+                            onValueChange = viewModel::setQuery,
+                            placeholder = stringResource(R.string.library_search_hint),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(focus),
+                        )
+                        LaunchedEffect(Unit) { focus.requestFocus() }
+                        return@NeoTopBar
+                    }
+                    val summary = booksSummary(state.allBooks)
                     TopBarSubtitle(
-                        if (state.importing) stringResource(R.string.library_importing) else booksSummary(state.allBooks),
+                        when {
+                            state.importing -> stringResource(R.string.library_importing)
+                            state.streak >= 2 -> stringResource(R.string.library_summary_streak, summary, state.streak)
+                            else -> summary
+                        },
                     )
                 },
             )
@@ -119,7 +176,8 @@ fun LibraryScreen(onOpenPdf: (Long) -> Unit, onOpenProfile: () -> Unit) {
                 }
             }
 
-            val showReading = state.selectedCollectionId == null && state.inProgress.isNotEmpty()
+            // Durante a busca fica só a estante filtrada.
+            val showReading = !state.searching && state.selectedCollectionId == null && state.inProgress.isNotEmpty()
             if (showReading) {
                 val (current, others) = state.inProgress.first() to state.inProgress.drop(1)
                 // Título e conteúdo no mesmo item: ficam juntos (12dp) e longe da seção anterior.
@@ -163,16 +221,36 @@ fun LibraryScreen(onOpenPdf: (Long) -> Unit, onOpenProfile: () -> Unit) {
 
             if (state.books.isNotEmpty()) {
                 fullWidthItem(key = "books-header") {
-                    SectionHeader(
-                        modifier = Modifier.padding(top = if (showReading) 8.dp else 0.dp),
-                        title = state.selectedCollection?.collection?.name ?: stringResource(R.string.library_all_books),
-                        count = state.books.size,
-                    )
+                    if (state.searching && !state.query.isNullOrBlank()) {
+                        SectionHeader(
+                            title = pluralStringResource(R.plurals.library_search_results, state.books.size, state.books.size),
+                        )
+                    } else {
+                        SectionHeader(
+                            modifier = Modifier.padding(top = if (showReading) 8.dp else 0.dp),
+                            title = state.selectedCollection?.collection?.name ?: stringResource(R.string.library_all_books),
+                            count = state.books.size,
+                            action = {
+                                NeoIconButton(
+                                    YachayIcons.Sort,
+                                    contentDescription = stringResource(R.string.library_sort),
+                                    onClick = { showSort = true },
+                                    size = 40.dp,
+                                )
+                            },
+                        )
+                    }
                 }
                 bookCards(state.books, onOpen = openBook, onLongPress = { actionsFor = it })
             } else if (state.loaded) {
                 fullWidthItem(key = "empty") {
-                    if (state.selectedCollectionId == null) {
+                    if (state.searching && state.allBooks.isNotEmpty()) {
+                        NeoEmptyState(
+                            title = stringResource(R.string.library_search_empty, state.query.orEmpty().trim()),
+                            body = stringResource(R.string.library_search_empty_body),
+                            color = Cream,
+                        )
+                    } else if (state.selectedCollectionId == null) {
                         NeoEmptyState(
                             title = stringResource(R.string.library_empty_title),
                             body = stringResource(R.string.library_empty_body),
@@ -198,6 +276,63 @@ fun LibraryScreen(onOpenPdf: (Long) -> Unit, onOpenProfile: () -> Unit) {
     actionsFor?.let { book ->
         BookActionsSheet(book = book, onDismiss = { actionsFor = null })
     }
+
+    if (showSort) {
+        SortSheet(
+            selected = state.sort,
+            onSelect = {
+                viewModel.setSort(it)
+                showSort = false
+            },
+            onDismiss = { showSort = false },
+        )
+    }
+}
+
+@Composable
+private fun SortSheet(selected: LibrarySort, onSelect: (LibrarySort) -> Unit, onDismiss: () -> Unit) {
+    NeoSheet(onDismiss = onDismiss) {
+        Column(
+            Modifier
+                .padding(horizontal = 20.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp)
+                .selectableGroup(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(stringResource(R.string.library_sort), style = MaterialTheme.typography.titleLarge)
+            LibrarySort.entries.forEach { sort ->
+                val isSelected = sort == selected
+                NeoPressable(
+                    onClick = { onSelect(sort) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { this.selected = isSelected },
+                    color = if (isSelected) Lime else Paper,
+                    shadow = if (isSelected) 4.dp else 2.dp,
+                    role = Role.RadioButton,
+                ) {
+                    Row(
+                        Modifier
+                            .heightIn(min = 48.dp)
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(stringResource(sortLabel(sort)), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                        if (isSelected) Icon(Icons.Filled.Check, contentDescription = null)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun sortLabel(sort: LibrarySort): Int = when (sort) {
+    LibrarySort.ADDED -> R.string.sort_added
+    LibrarySort.OPENED -> R.string.sort_opened
+    LibrarySort.TITLE -> R.string.sort_title
+    LibrarySort.AUTHOR -> R.string.sort_author
+    LibrarySort.PROGRESS -> R.string.sort_progress
 }
 
 @Composable

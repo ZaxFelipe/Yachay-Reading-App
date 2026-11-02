@@ -3,7 +3,23 @@ package com.yachay.app.ui.reader.epub
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.view.ActionMode
+import android.view.Menu
+import android.view.MenuItem
 import android.view.View
+import androidx.compose.material.icons.filled.Search
+import com.yachay.app.ui.reader.BookSearch
+import com.yachay.app.ui.reader.SearchSheet
+import com.yachay.app.ui.theme.Lime
+import org.readium.r2.navigator.Decoration
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.ui.platform.LocalContext
+import com.yachay.app.data.db.AnnotationType
+import com.yachay.app.ui.reader.AnnotationsSheet
+import com.yachay.app.ui.reader.BookmarkButton
+import com.yachay.app.ui.reader.HighlightActionsSheet
+import kotlinx.coroutines.flow.combine
+import org.readium.r2.navigator.DecorableNavigator
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.material.icons.Icons
@@ -39,6 +55,7 @@ import com.yachay.app.YachayNavigationBar
 import com.yachay.app.YachayStatusBar
 import com.yachay.app.appContainer
 import com.yachay.app.domain.DailyGoal
+import com.yachay.app.data.goals.PageRecorded
 import com.yachay.app.domain.DailyGoalProgress
 import com.yachay.app.domain.ReadingProgress
 import com.yachay.app.ui.components.DailyGoalNotice
@@ -72,7 +89,35 @@ class EpubReaderActivity : AppCompatActivity() {
     private var bookId: Long = -1
     private val progress = MutableStateFlow(0f)
     private val goalNotice = MutableStateFlow(false)
-    private val unlockedLevel = MutableStateFlow<Int?>(null)
+    private val lastNotice = MutableStateFlow<PageRecorded?>(null)
+    private lateinit var annotations: EpubAnnotations
+
+    private lateinit var search: BookSearch<Locator>
+
+    /** Destaque tocado na página (abre a sheet "Remover destaque"). */
+    private val tappedHighlight = MutableStateFlow<Long?>(null)
+
+    private val navigator: EpubNavigatorFragment?
+        get() = supportFragmentManager.findFragmentByTag(NAVIGATOR_TAG) as? EpubNavigatorFragment
+
+    /** "Destacar" no menu de seleção de texto (o resto do menu do sistema continua lá). */
+    private val selectionCallback = object : ActionMode.Callback {
+        override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
+            menu.add(Menu.NONE, MENU_HIGHLIGHT, 0, R.string.highlight_action)
+            return true
+        }
+
+        override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean = false
+
+        override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
+            if (item.itemId != MENU_HIGHLIGHT) return false
+            lifecycleScope.launch { highlightSelection() }
+            mode.finish()
+            return true
+        }
+
+        override fun onDestroyActionMode(mode: ActionMode) = Unit
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         bookId = intent.getLongExtra(EXTRA_BOOK_ID, -1)
@@ -84,10 +129,15 @@ class EpubReaderActivity : AppCompatActivity() {
             return
         }
 
+        annotations = EpubAnnotations(bookId, session.publication, container.annotations)
+        search = BookSearch(lifecycleScope, epubSearchEngine(applicationContext, session.publication, annotations))
         supportFragmentManager.fragmentFactory = EpubNavigatorFactory(session.publication)
             .createFragmentFactory(
                 initialLocator = session.initialLocator,
                 initialPreferences = session.initialPreferences.toEpubPreferences(),
+                configuration = EpubNavigatorFragment.Configuration {
+                    selectionActionModeCallback = selectionCallback
+                },
             )
 
         super.onCreate(savedInstanceState)
@@ -111,18 +161,36 @@ class EpubReaderActivity : AppCompatActivity() {
 
         // Toques nas bordas viram página; arrastar já funciona por padrão.
         navigator.addInputListener(DirectionalNavigationAdapter(navigator))
+        navigator.addDecorationListener(
+            EpubAnnotations.HIGHLIGHTS_GROUP,
+            object : DecorableNavigator.Listener {
+                override fun onDecorationActivated(event: DecorableNavigator.OnActivatedEvent): Boolean {
+                    tappedHighlight.value = EpubAnnotations.annotationId(event.decoration.id)
+                    return true
+                }
+            },
+        )
 
         findViewById<ComposeView>(R.id.reader_top_bar).setContent {
             YachayTheme {
                 val value by progress.collectAsStateWithLifecycle()
                 val goal by container.dailyGoal.progress.collectAsStateWithLifecycle(initialValue = DailyGoalProgress(0))
                 val showGoalNotice by goalNotice.collectAsStateWithLifecycle()
-                val newLevel by unlockedLevel.collectAsStateWithLifecycle()
+                val notice by lastNotice.collectAsStateWithLifecycle()
                 val preferences by container.settings.readerPreferences
                     .collectAsStateWithLifecycle(initialValue = session.initialPreferences)
                 var showTextSettings by rememberSaveable { mutableStateOf(false) }
+                var showAnnotations by rememberSaveable { mutableStateOf(false) }
+                var showSearch by rememberSaveable { mutableStateOf(false) }
+                val searchQuery by search.query.collectAsStateWithLifecycle()
+                val searchState by search.state.collectAsStateWithLifecycle()
+                val entries by annotations.entries.collectAsStateWithLifecycle(initialValue = emptyList())
+                val locator by navigator.currentLocator.collectAsStateWithLifecycle()
+                val bookmarkHere = annotations.bookmarkAt(entries, locator)
+                val tapped by tappedHighlight.collectAsStateWithLifecycle()
                 NeoTopBar(
                     title = session.title,
+                    stackTitle = true,
                     navigationIcon = {
                         NeoIconButton(
                             Icons.AutoMirrored.Filled.ArrowBack,
@@ -130,14 +198,62 @@ class EpubReaderActivity : AppCompatActivity() {
                             onClick = ::finish,
                         )
                     },
-                    actions = { TextSettingsButton(onClick = { showTextSettings = true }) },
+                    actions = {
+                        NeoIconButton(
+                            Icons.Filled.Search,
+                            contentDescription = stringResource(R.string.search_open),
+                            onClick = { showSearch = true },
+                        )
+                        BookmarkButton(marked = bookmarkHere != null, onClick = { toggleBookmark(bookmarkHere) })
+                        NeoIconButton(
+                            Icons.AutoMirrored.Filled.List,
+                            contentDescription = stringResource(R.string.annotations_open),
+                            onClick = { showAnnotations = true },
+                        )
+                        TextSettingsButton(onClick = { showTextSettings = true })
+                    },
                     bottom = {
                         Box {
                             NeoProgressBar(progress = value, goal = goal)
-                            DailyGoalNotice(visible = showGoalNotice, progress = goal, unlockedLevel = newLevel)
+                            DailyGoalNotice(visible = showGoalNotice, progress = goal, unlockedLevel = notice?.unlockedLevel, streakBonus = notice?.streakBonus)
                         }
                     },
                 )
+                if (showSearch) {
+                    SearchSheet(
+                        query = searchQuery,
+                        onQueryChange = { search.query.value = it },
+                        state = searchState,
+                        onOpen = { hit ->
+                            showSearch = false
+                            lifecycleScope.launch { showSearchResult(hit.target) }
+                        },
+                        onDismiss = { showSearch = false },
+                    )
+                }
+                if (showAnnotations) {
+                    val context = LocalContext.current
+                    AnnotationsSheet(
+                        bookmarks = annotations.items(context, entries, AnnotationType.BOOKMARK),
+                        highlights = annotations.items(context, entries, AnnotationType.HIGHLIGHT),
+                        onOpen = { id ->
+                            entries.firstOrNull { it.annotation.id == id }?.let { navigator.go(it.locator, animated = false) }
+                            showAnnotations = false
+                        },
+                        onRemove = { id -> container.appScope.launch { annotations.remove(id) } },
+                        onDismiss = { showAnnotations = false },
+                    )
+                }
+                tapped?.let { id ->
+                    HighlightActionsSheet(
+                        text = entries.firstOrNull { it.annotation.id == id }?.annotation?.text,
+                        onRemove = {
+                            container.appScope.launch { annotations.remove(id) }
+                            tappedHighlight.value = null
+                        },
+                        onDismiss = { tappedHighlight.value = null },
+                    )
+                }
                 if (showTextSettings) {
                     val settings = container.settings
                     // appScope: a escolha é gravada mesmo se o leitor fechar logo em seguida.
@@ -145,6 +261,9 @@ class EpubReaderActivity : AppCompatActivity() {
                         preferences = preferences,
                         onFontScale = { container.appScope.launch { settings.setFontScale(it) } },
                         onLineSpacing = { container.appScope.launch { settings.setLineSpacing(it) } },
+                        onFont = { container.appScope.launch { settings.setFont(it) } },
+                        onMargins = { container.appScope.launch { settings.setMargins(it) } },
+                        onTextAlign = { container.appScope.launch { settings.setTextAlign(it) } },
                         onTheme = { container.appScope.launch { settings.setReadingTheme(it) } },
                         onDismiss = { showTextSettings = false },
                     )
@@ -169,6 +288,15 @@ class EpubReaderActivity : AppCompatActivity() {
                 }
             }
         }
+        // Destaques pintados na página; o tema muda a cor. O Readium reposiciona ao re-paginar
+        // (mudar a fonte), porque o destaque é ancorado no texto do locator.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                combine(annotations.entries, container.settings.readingTheme, ::Pair).collect { (entries, theme) ->
+                    navigator.applyDecorations(annotations.decorations(entries, theme), EpubAnnotations.HIGHLIGHTS_GROUP)
+                }
+            }
+        }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 navigator.currentLocator.collect { progress.value = ReadingProgress.forEpub(it.locations.totalProgression) }
@@ -186,17 +314,47 @@ class EpubReaderActivity : AppCompatActivity() {
                     val progression = locator.locations.progression ?: return@collect
                     val page = DailyGoal.epubPage(locator.href.toString(), progression)
                     val recorded = container.dailyGoal.recordPage(bookId, page)
-                    if (recorded.shouldNotify) showGoalNotice(recorded.unlockedLevel)
+                    if (recorded.shouldNotify) showGoalNotice(recorded)
                 }
             }
         }
     }
 
-    private fun showGoalNotice(level: Int?) = lifecycleScope.launch {
-        unlockedLevel.value = level
+    private fun showGoalNotice(recorded: PageRecorded) = lifecycleScope.launch {
+        lastNotice.value = recorded
         goalNotice.value = true
         delay(NOTICE_MS)
         goalNotice.value = false
+    }
+
+    /** Vai até o resultado e pinta o termo por alguns segundos (grupo de decoração próprio). */
+    private suspend fun showSearchResult(locator: Locator) {
+        val navigator = navigator ?: return
+        navigator.go(locator, animated = false)
+        val tint = Lime.toArgb()
+        navigator.applyDecorations(
+            listOf(Decoration(id = "search", locator = locator, style = Decoration.Style.Highlight(tint = tint, isActive = true))),
+            SEARCH_GROUP,
+        )
+        delay(SEARCH_HIGHLIGHT_MS)
+        navigator.applyDecorations(emptyList(), SEARCH_GROUP)
+    }
+
+    private suspend fun highlightSelection() {
+        val navigator = navigator ?: return
+        val selection = navigator.currentSelection() ?: return
+        val text = selection.locator.text.highlight?.trim().orEmpty()
+        navigator.clearSelection()
+        if (text.isEmpty()) return
+        // appScope: grava mesmo se o leitor fechar logo em seguida.
+        container.appScope.launch { annotations.addHighlight(selection.locator, text) }
+    }
+
+    private fun toggleBookmark(existing: EpubAnnotations.Entry?) {
+        val locator = navigator?.currentLocator?.value ?: return
+        container.appScope.launch {
+            if (existing != null) annotations.remove(existing.annotation.id) else annotations.addBookmark(locator)
+        }
     }
 
     override fun onStop() {
@@ -228,6 +386,9 @@ class EpubReaderActivity : AppCompatActivity() {
         private const val NAVIGATOR_TAG = "epub_navigator"
         private const val SAVE_DEBOUNCE_MS = 500L
         private const val NOTICE_MS = 3_000L
+        private const val MENU_HIGHLIGHT = 1
+        private const val SEARCH_GROUP = "search"
+        private const val SEARCH_HIGHLIGHT_MS = 4_000L
 
         fun intent(context: Context, bookId: Long): Intent =
             Intent(context, EpubReaderActivity::class.java).putExtra(EXTRA_BOOK_ID, bookId)

@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Devolve a ação "abrir livro", que despacha para o leitor certo de cada formato:
- * PDF → rota Compose [com.yachay.app.ui.navigation.PdfReaderRoute];
+ * PDF e CBZ → leitor de páginas, rota Compose [com.yachay.app.ui.navigation.PdfReaderRoute];
  * EPUB → abre a publicação no Readium e inicia a [EpubReaderActivity].
  */
 @Composable
@@ -28,7 +28,7 @@ fun rememberBookOpener(onOpenPdf: (bookId: Long) -> Unit): (BookEntity) -> Unit 
     return remember(context, scope) {
         { book ->
             when (book.format) {
-                BookFormat.PDF -> openPdf(book.id)
+                BookFormat.PDF, BookFormat.CBZ -> openPdf(book.id)
                 BookFormat.EPUB -> scope.launch {
                     if (context.appContainer.epubSessions.open(book)) {
                         context.startActivity(EpubReaderActivity.intent(context, book.id))
