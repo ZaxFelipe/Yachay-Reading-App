@@ -38,6 +38,7 @@ import com.yachay.app.ui.collections.CollectionDetailScreen
 import com.yachay.app.ui.collections.CollectionsScreen
 import com.yachay.app.ui.components.NeoPressable
 import com.yachay.app.ui.library.LibraryScreen
+import com.yachay.app.ui.profile.ProfileScreen
 import com.yachay.app.ui.reader.pdf.PdfReaderScreen
 import com.yachay.app.ui.settings.SettingsScreen
 import com.yachay.app.ui.theme.Lime
@@ -67,13 +68,22 @@ fun YachayNavHost() {
             modifier = Modifier.padding(bottom = padding.calculateBottomPadding()),
         ) {
             composable<LibraryRoute> {
-                LibraryScreen(onOpenPdf = { navController.navigate(PdfReaderRoute(it)) })
+                LibraryScreen(
+                    onOpenPdf = { navController.navigate(PdfReaderRoute(it)) },
+                    onOpenProfile = { navController.navigate(ProfileRoute) { launchSingleTop = true } },
+                )
             }
             composable<CollectionsRoute> {
                 CollectionsScreen(onOpenCollection = { navController.navigate(CollectionDetailRoute(it)) })
             }
             composable<SettingsRoute> {
                 SettingsScreen()
+            }
+            composable<ProfileRoute> {
+                ProfileScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenPdf = { navController.navigate(PdfReaderRoute(it)) },
+                )
             }
             composable<CollectionDetailRoute> { entry ->
                 val route = entry.toRoute<CollectionDetailRoute>()

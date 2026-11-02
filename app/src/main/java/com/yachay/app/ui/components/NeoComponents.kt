@@ -1,5 +1,11 @@
 package com.yachay.app.ui.components
 
+import com.yachay.app.domain.DailyGoalProgress
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -254,15 +260,44 @@ fun NeoProgressBar(
     showLabel: Boolean = true,
     /** Purple por padrão; sobre um fundo roxo use Lime para o preenchimento continuar visível. */
     fillColor: Color = Purple,
+    /**
+     * Meta do dia: barra em setores (um por página) logo acima do trilho. null = sem meta.
+     * Batida a meta, a barra some (o aviso "Meta batida!" fica por conta de [DailyGoalNotice]).
+     */
+    goal: DailyGoalProgress? = null,
 ) {
     val animated by animateFloatAsState(progress.coerceIn(0f, 1f), label = "progress")
     val done = ReadingProgress.isDone(progress)
     val fill = if (done) Lime else fillColor
 
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier
-                .weight(1f)
+    // Alinhado pela base: o percentual fica ao lado do trilho, e a meta só por cima dele.
+    Row(modifier, verticalAlignment = Alignment.Bottom) {
+        Column(Modifier.weight(1f)) {
+            if (goal != null && !goal.isDone) {
+                DailyGoalSegments(goal, Modifier.fillMaxWidth())
+                Spacer(Modifier.height(5.dp))
+            }
+            ProgressTrack(animated, fill, height)
+        }
+        if (showLabel) {
+            Spacer(Modifier.width(8.dp))
+            Box(Modifier.height(height), contentAlignment = Alignment.CenterStart) {
+                Text(
+                    text = if (done) stringResource(R.string.book_progress_done) else "${ReadingProgress.percent(progress)}%",
+                    style = PercentTextStyle,
+                    color = LocalContentColor.current,
+                    modifier = Modifier.wrapContentHeight(unbounded = true),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProgressTrack(animated: Float, fill: Color, height: Dp) {
+    Box(
+        Modifier
+                .fillMaxWidth()
                 .height(height)
                 .background(Paper, NeoDefaults.Shape)
                 .neoBorder(width = 2.dp)
@@ -281,17 +316,35 @@ fun NeoProgressBar(
                         },
                 )
             }
-        }
-        if (showLabel) {
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = if (done) stringResource(R.string.book_progress_done) else "${ReadingProgress.percent(progress)}%",
-                style = PercentTextStyle,
-                color = LocalContentColor.current,
+    }
+}
+
+/**
+ * Meta do dia em setores: um por página da meta (10), preenchidos em limão conforme a
+ * leitura. Fica sobre os campos roxos (barras e "Lendo agora"), onde o limão é o destaque.
+ */
+@Composable
+private fun DailyGoalSegments(goal: DailyGoalProgress, modifier: Modifier = Modifier) {
+    val description = stringResource(R.string.daily_goal_description, goal.pagesRead, goal.target)
+    Row(
+        modifier.clearAndSetSemantics { contentDescription = description },
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        repeat(goal.target) { index ->
+            val filled = index < goal.pagesRead
+            val color by animateColorAsState(if (filled) Lime else Paper, label = "goalSegment")
+            Box(
+                Modifier
+                    .weight(1f)
+                    .height(7.dp)
+                    .background(color, GoalSegmentShape)
+                    .neoBorder(width = 1.5.dp, shape = GoalSegmentShape),
             )
         }
     }
 }
+
+private val GoalSegmentShape = RoundedCornerShape(2.dp)
 
 /**
  * Barra superior: campo roxo da marca com contorno inferior grosso. O conteúdo
@@ -464,22 +517,6 @@ fun NeoEmptyState(
             color = Lime,
             outline = Ink,
         )
-    }
-}
-
-/** Marca do Yachay: um "Y" em bloco limão, com contorno e sombra dura, como um selo sobre o roxo. */
-@Composable
-fun YachayMark(modifier: Modifier = Modifier, size: Dp = 36.dp) {
-    Box(
-        modifier
-            .padding(end = 3.dp, bottom = 3.dp)
-            .neoShadow(3.dp, color = Ink)
-            .size(size)
-            .background(Lime, NeoDefaults.Shape)
-            .neoBorder(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text("Y", style = MaterialTheme.typography.titleLarge, color = Ink)
     }
 }
 

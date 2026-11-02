@@ -66,6 +66,7 @@ import com.yachay.app.appContainer
 import com.yachay.app.domain.ReadingTheme
 import com.yachay.app.ui.reader.colors
 import com.yachay.app.ui.reader.pdfPageFilter
+import com.yachay.app.ui.components.DailyGoalNotice
 import com.yachay.app.ui.components.NeoButton
 import com.yachay.app.ui.components.NeoEmptyState
 import com.yachay.app.ui.components.NeoIconButton
@@ -96,6 +97,9 @@ fun PdfReaderScreen(bookId: Long, onBack: () -> Unit) {
     }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val currentPage by viewModel.currentPage.collectAsStateWithLifecycle()
+    val goal by viewModel.goal.collectAsStateWithLifecycle()
+    val goalNotice by viewModel.goalNotice.collectAsStateWithLifecycle()
+    val unlockedLevel by viewModel.unlockedLevel.collectAsStateWithLifecycle()
     val readingTheme by context.appContainer.settings.readingTheme
         .collectAsStateWithLifecycle(initialValue = ReadingTheme.Default)
 
@@ -116,8 +120,11 @@ fun PdfReaderScreen(bookId: Long, onBack: () -> Unit) {
             },
             bottom = ready?.let {
                 {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        NeoProgressBar(progress = viewModel.progressFor(currentPage), modifier = Modifier.weight(1f))
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Box(Modifier.weight(1f)) {
+                            NeoProgressBar(progress = viewModel.progressFor(currentPage), goal = goal)
+                            DailyGoalNotice(visible = goalNotice, progress = goal, unlockedLevel = unlockedLevel)
+                        }
                         Spacer(Modifier.width(12.dp))
                         Text(
                             stringResource(R.string.reader_page_of, currentPage + 1, it.document.pageCount),

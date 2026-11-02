@@ -40,6 +40,7 @@ import com.yachay.app.data.db.BookEntity
 import com.yachay.app.data.importer.ImportResult
 import com.yachay.app.domain.BookFormat
 import com.yachay.app.ui.collections.BookActionsSheet
+import com.yachay.app.ui.profile.ProfileButton
 import com.yachay.app.ui.components.AlsoReadingCard
 import com.yachay.app.ui.components.BookGrid
 import com.yachay.app.ui.components.NeoButton
@@ -53,7 +54,6 @@ import com.yachay.app.ui.components.SectionHeader
 import com.yachay.app.ui.components.Sparkle
 import com.yachay.app.ui.theme.Ink
 import com.yachay.app.ui.components.TopBarSubtitle
-import com.yachay.app.ui.components.YachayMark
 import com.yachay.app.ui.components.bookCards
 import com.yachay.app.ui.components.booksSummary
 import com.yachay.app.ui.components.fullWidthItem
@@ -64,7 +64,7 @@ import com.yachay.app.ui.theme.Night
 
 /** Pergunta da tela: "onde eu parei?". Responde com "Lendo agora" antes da estante. */
 @Composable
-fun LibraryScreen(onOpenPdf: (Long) -> Unit) {
+fun LibraryScreen(onOpenPdf: (Long) -> Unit, onOpenProfile: () -> Unit) {
     val context = LocalContext.current
     val viewModel = viewModel { LibraryViewModel(context.appContainer) }
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -90,7 +90,7 @@ fun LibraryScreen(onOpenPdf: (Long) -> Unit) {
         topBar = {
             NeoTopBar(
                 title = stringResource(R.string.app_name),
-                navigationIcon = { YachayMark() },
+                navigationIcon = { ProfileButton(avatar = state.avatar, onClick = onOpenProfile) },
                 actions = {
                     Sparkle(Modifier.padding(end = 4.dp), extent = 24.dp, color = Lime, outline = Ink)
                 },
@@ -126,7 +126,7 @@ fun LibraryScreen(onOpenPdf: (Long) -> Unit) {
                 fullWidthItem(key = "reading-now") {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         SectionHeader(stringResource(R.string.library_reading_now))
-                        ReadingNowCard(current, onContinue = { openBook(current) }, onLongClick = { actionsFor = current })
+                        ReadingNowCard(current, goal = state.goal, onContinue = { openBook(current) }, onLongClick = { actionsFor = current })
                     }
                 }
                 if (others.isNotEmpty()) {

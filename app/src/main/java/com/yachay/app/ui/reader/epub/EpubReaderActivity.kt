@@ -38,7 +38,12 @@ import com.yachay.app.R
 import com.yachay.app.YachayNavigationBar
 import com.yachay.app.YachayStatusBar
 import com.yachay.app.appContainer
+import com.yachay.app.domain.DailyGoal
+import com.yachay.app.domain.DailyGoalProgress
 import com.yachay.app.domain.ReadingProgress
+import com.yachay.app.ui.components.DailyGoalNotice
+import androidx.compose.foundation.layout.Box
+import kotlinx.coroutines.delay
 import com.yachay.app.domain.ReadingTheme
 import com.yachay.app.ui.reader.colors
 import com.yachay.app.ui.components.NeoIconButton
@@ -66,6 +71,8 @@ class EpubReaderActivity : AppCompatActivity() {
     private val container by lazy { appContainer }
     private var bookId: Long = -1
     private val progress = MutableStateFlow(0f)
+    private val goalNotice = MutableStateFlow(false)
+    private val unlockedLevel = MutableStateFlow<Int?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         bookId = intent.getLongExtra(EXTRA_BOOK_ID, -1)
@@ -108,6 +115,9 @@ class EpubReaderActivity : AppCompatActivity() {
         findViewById<ComposeView>(R.id.reader_top_bar).setContent {
             YachayTheme {
                 val value by progress.collectAsStateWithLifecycle()
+                val goal by container.dailyGoal.progress.collectAsStateWithLifecycle(initialValue = DailyGoalProgress(0))
+                val showGoalNotice by goalNotice.collectAsStateWithLifecycle()
+                val newLevel by unlockedLevel.collectAsStateWithLifecycle()
                 val preferences by container.settings.readerPreferences
                     .collectAsStateWithLifecycle(initialValue = session.initialPreferences)
                 var showTextSettings by rememberSaveable { mutableStateOf(false) }
@@ -121,7 +131,12 @@ class EpubReaderActivity : AppCompatActivity() {
                         )
                     },
                     actions = { TextSettingsButton(onClick = { showTextSettings = true }) },
-                    bottom = { NeoProgressBar(progress = value) },
+                    bottom = {
+                        Box {
+                            NeoProgressBar(progress = value, goal = goal)
+                            DailyGoalNotice(visible = showGoalNotice, progress = goal, unlockedLevel = newLevel)
+                        }
+                    },
                 )
                 if (showTextSettings) {
                     val settings = container.settings
@@ -164,6 +179,24 @@ class EpubReaderActivity : AppCompatActivity() {
                 navigator.currentLocator.debounce(SAVE_DEBOUNCE_MS).collect(::saveProgress)
             }
         }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                // Meta do dia: a "página" é a tela onde a pessoa ficou alguns segundos.
+                navigator.currentLocator.debounce(DailyGoal.PAGE_DWELL_MS).collect { locator ->
+                    val progression = locator.locations.progression ?: return@collect
+                    val page = DailyGoal.epubPage(locator.href.toString(), progression)
+                    val recorded = container.dailyGoal.recordPage(bookId, page)
+                    if (recorded.shouldNotify) showGoalNotice(recorded.unlockedLevel)
+                }
+            }
+        }
+    }
+
+    private fun showGoalNotice(level: Int?) = lifecycleScope.launch {
+        unlockedLevel.value = level
+        goalNotice.value = true
+        delay(NOTICE_MS)
+        goalNotice.value = false
     }
 
     override fun onStop() {
@@ -194,6 +227,7 @@ class EpubReaderActivity : AppCompatActivity() {
         private const val EXTRA_BOOK_ID = "bookId"
         private const val NAVIGATOR_TAG = "epub_navigator"
         private const val SAVE_DEBOUNCE_MS = 500L
+        private const val NOTICE_MS = 3_000L
 
         fun intent(context: Context, bookId: Long): Intent =
             Intent(context, EpubReaderActivity::class.java).putExtra(EXTRA_BOOK_ID, bookId)

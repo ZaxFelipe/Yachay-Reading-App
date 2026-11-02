@@ -33,6 +33,10 @@ interface BookDao {
     )
     fun observeInProgress(doneThreshold: Float, limit: Int): Flow<List<BookEntity>>
 
+    /** Livros já abertos (inclusive concluídos), do último aberto para o mais antigo. */
+    @Query("SELECT * FROM books WHERE lastOpenedAt IS NOT NULL ORDER BY lastOpenedAt DESC LIMIT :limit")
+    fun observeRecentlyOpened(limit: Int): Flow<List<BookEntity>>
+
     @Query("SELECT * FROM books WHERE id = :id")
     fun observeById(id: Long): Flow<BookEntity?>
 

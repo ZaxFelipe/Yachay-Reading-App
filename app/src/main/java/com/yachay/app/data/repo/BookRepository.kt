@@ -22,6 +22,8 @@ class BookRepository(
     fun observeInProgress(limit: Int = 10): Flow<List<BookEntity>> =
         dao.observeInProgress(ReadingProgress.DONE_THRESHOLD, limit)
 
+    fun observeRecentlyOpened(limit: Int = 5): Flow<List<BookEntity>> = dao.observeRecentlyOpened(limit)
+
     fun observe(id: Long): Flow<BookEntity?> = dao.observeById(id)
 
     suspend fun get(id: Long): BookEntity? = dao.getById(id)

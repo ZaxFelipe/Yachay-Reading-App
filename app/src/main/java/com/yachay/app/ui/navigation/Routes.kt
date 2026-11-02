@@ -11,6 +11,10 @@ data object CollectionsRoute
 @Serializable
 data object SettingsRoute
 
+/** Aberto pelo avatar no canto da Biblioteca. */
+@Serializable
+data object ProfileRoute
+
 @Serializable
 data class CollectionDetailRoute(val collectionId: Long)
 

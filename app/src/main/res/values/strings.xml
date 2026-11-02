@@ -108,6 +108,11 @@
     <string name="reader_loading">Abrindo livro…</string>
     <string name="reader_error_title">Ops!</string>
     <string name="reader_page_of">%1$d / %2$d</string>
+    <!-- Meta diária -->
+    <string name="daily_goal_description">Meta do dia: %1$d de %2$d páginas</string>
+    <string name="daily_goal_done">Meta batida! %1$d páginas hoje</string>
+    <string name="daily_goal_level_up">Meta batida! Nível %1$d: avatar novo</string>
+    <string name="daily_goal_almost_there">Quase lá! %1$d de %2$d páginas hoje</string>
     <string name="reader_text_settings">Ajustes de texto</string>
     <string name="reader_font_size">Tamanho da fonte</string>
     <string name="reader_font_decrease">Diminuir fonte</string>
@@ -118,4 +123,32 @@
     <string name="line_spacing_compact">Compacto</string>
     <string name="line_spacing_normal">Normal</string>
     <string name="line_spacing_wide">Amplo</string>
+
+    <!-- Perfil -->
+    <string name="profile_title">Perfil</string>
+    <string name="profile_open">Abrir perfil</string>
+    <string name="profile_avatar_description">Avatar do nível %1$d</string>
+    <string name="profile_level">Nível %1$d</string>
+    <string name="profile_level_of">Nível %1$d de %2$d</string>
+    <string name="profile_level_short">Nv %1$d</string>
+    <string name="profile_xp_of">%1$d / %2$d XP</string>
+    <string name="profile_max_level">Nível máximo! %1$d XP</string>
+    <plurals name="profile_goals_to_next">
+        <item quantity="one">Falta %1$d meta para o próximo avatar</item>
+        <item quantity="other">Faltam %1$d metas para o próximo avatar</item>
+    </plurals>
+    <plurals name="profile_pages_read">
+        <item quantity="one">página lida</item>
+        <item quantity="other">páginas lidas</item>
+    </plurals>
+    <plurals name="profile_goals_met">
+        <item quantity="one">meta batida</item>
+        <item quantity="other">metas batidas</item>
+    </plurals>
+    <string name="profile_pages_note">Somando todos os livros. Cada página conta uma vez por dia, depois de 3 s nela. Cada meta batida vale 100 XP.</string>
+    <string name="profile_avatars">Avatares</string>
+    <string name="profile_avatars_hint">Toque num avatar desbloqueado para usá-lo. Ao desbloquear um novo, ele vira sua foto.</string>
+    <string name="profile_avatar_in_use">Em uso</string>
+    <string name="profile_recent_books">Lidos recentemente</string>
+    <string name="profile_recent_empty">Os livros que você abrir aparecem aqui.</string>
 </resources>

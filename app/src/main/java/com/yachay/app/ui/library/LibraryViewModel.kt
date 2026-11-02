@@ -7,6 +7,7 @@ import com.yachay.app.AppContainer
 import com.yachay.app.data.db.BookEntity
 import com.yachay.app.data.db.CollectionWithCount
 import com.yachay.app.data.importer.ImportResult
+import com.yachay.app.domain.DailyGoalProgress
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -29,6 +30,10 @@ data class LibraryUiState(
     /** null = todos os livros. */
     val selectedCollectionId: Long? = null,
     val importing: Boolean = false,
+    /** Meta do dia, mostrada como sub-barra no "Lendo agora". */
+    val goal: DailyGoalProgress = DailyGoalProgress(0),
+    /** Avatar do botão de perfil (o escolhido ou o do nível). */
+    val avatar: Int = 1,
 ) {
     val selectedCollection: CollectionWithCount?
         get() = collections.firstOrNull { it.collection.id == selectedCollectionId }
@@ -40,6 +45,7 @@ class LibraryViewModel(container: AppContainer) : ViewModel() {
     private val books = container.bookRepository
     private val collections = container.collectionRepository
     private val importer = container.bookImporter
+    private val dailyGoal = container.dailyGoal
 
     private val selectedCollectionId = MutableStateFlow<Long?>(null)
     private val importing = MutableStateFlow(false)
@@ -53,7 +59,7 @@ class LibraryViewModel(container: AppContainer) : ViewModel() {
         if (id == null) all.map { it to it } else combine(all, books.observeInCollection(id)) { a, v -> a to v }
     }
 
-    val state = combine(
+    private val baseState = combine(
         shelves,
         books.observeInProgress(),
         collections.observeWithCounts(),
@@ -72,7 +78,13 @@ class LibraryViewModel(container: AppContainer) : ViewModel() {
             selectedCollectionId = validSelection,
             importing = isImporting,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
+    }
+
+    // combine só aceita 5 fluxos tipados: meta e nível entram num segundo passo.
+    val state = combine(baseState, dailyGoal.progress, dailyGoal.stats) { base, goal, stats ->
+        base.copy(goal = goal, avatar = stats.avatar)
+    }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
 
     fun selectCollection(id: Long?) {
         selectedCollectionId.value = id

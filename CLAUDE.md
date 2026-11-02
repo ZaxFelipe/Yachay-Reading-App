@@ -36,6 +36,7 @@ app/src/main/java/com/yachay/app/
   ui/navigation/   Routes (type-safe, @Serializable), YachayNavHost (+ bottom bar)
   ui/library/      Biblioteca (grade, filtros, "Continuar lendo", importação)
   ui/collections/  Lista, detalhe, BookActionsSheet (marcar coleções / remover livro)
+  ui/profile/      Perfil (nível, XP, avatares, páginas, lidos recentemente) + Avatar/ProfileButton
   ui/reader/       BookOpener (despacha por formato), pdf/, epub/
 ```
 
@@ -59,6 +60,18 @@ app/src/main/java/com/yachay/app/
 - "Lendo agora" mostra a posição atual (`positionLabel`) e a barra mostra o máximo; se a pessoa voltou, o rótulo ganha "· lido até X%".
 - Gravações usam debounce e rodam em `container.appScope` para não se perderem ao fechar o leitor.
 
+### Meta diária (`domain/DailyGoal.kt`, `data/goals/DailyGoalRepository.kt`)
+- Meta: **10 páginas por dia** (`DailyGoal.DEFAULT_TARGET`, fixa por enquanto), somando todos os livros. Vira o dia → recomeça do zero (só o dia atual é guardado, DataStore `daily_goal`: chaves `day` e `pages`).
+- Uma "página" conta depois de `PAGE_DWELL_MS` (3 s) parada nela, uma vez por dia. Chave por livro: PDF = `DailyGoal.pdfPage(índice)`; EPUB = `DailyGoal.epubPage(href, progression)` — a `position` do Readium **não serve** (num livro real uma posição cobre várias telas). Mudar a fonte do EPUB gera telas novas.
+- Exibição: barra em **setores, um por página da meta** (10), logo acima do trilho do `NeoProgressBar` (parâmetro `goal: DailyGoalProgress`, `DailyGoalSegments`); setor lido = limão, vazio = papel. Aparece nas barras dos dois leitores e no "Lendo agora" (sempre sobre roxo). O percentual do livro fica ao lado do trilho, não da meta. **Batida a meta, a barra de setores some** (até o dia seguinte). Ao cruzar 60% (`almostThereAt`, em inteiros), `DailyGoalNotice` mostra "Quase lá! 6 de 10 páginas hoje" (creme) por 3 s num `Popup` abaixo da barra (não empurra o layout do EPUB); na página que completa a meta (`reachesTarget`), o mesmo popup vira "Meta batida! 10 páginas hoje" (limão). Cada aviso aparece uma vez por dia (`PageRecorded.shouldNotify`).
+
+### Perfil, XP e avatares (`domain/ReaderLevel.kt`, `ui/profile/`)
+- O avatar do nível atual fica no canto superior esquerdo da Biblioteca (`ProfileButton`, mostra `ReaderStats.avatar`) e abre `ProfileRoute` (tela com voltar; sem aba própria na barra inferior).
+- Cada meta diária batida = **100 XP** (`ReaderLevel.XP_PER_GOAL`). Subir do nível L para L+1 custa L metas (`xpFor(L) = 100·(L−1)·L/2`): nível 2 com 1 meta, nível 16 com 120. Um avatar por nível. Na galeria do Perfil, qualquer avatar desbloqueado pode virar a foto (chave `avatar` no DataStore `daily_goal`; `ReaderStats.avatar` ignora escolha bloqueada). Ao desbloquear um nível, `recordPage` apaga a escolha na mesma transação → o avatar novo vira a foto.
+- Totais no mesmo DataStore da meta (`daily_goal`), gravados na mesma transação de `recordPage`: `total_pages` (páginas contadas pela meta, cada uma uma vez por dia) e `goals_met`. XP e nível são derivados (`ReaderStats`), então dá para recalibrar a curva sem migrar dados. `PageRecorded.unlockedLevel` ≠ null quando a meta desbloqueou avatar → o aviso vira "Meta batida! Nível N: avatar novo".
+- "Lidos recentemente" = livros com `lastOpenedAt`, mais recente primeiro (`BookDao.observeRecentlyOpened`, 5).
+- Avatares: `res/drawable-nodpi/avatar_01..16.webp` (256px), recortados da grade 4×4 de `referencias/ref2.png` — quadrado entre o topo de cada quadro e o rótulo "Lvl N". Bloqueados aparecem sem cor, esmaecidos e com cadeado.
+
 ### Importação (`data/importer/BookImporter.kt`)
 `takePersistableUriPermission` é obrigatório — sem ele a URI para de funcionar após reiniciar o app. Duplicatas são detectadas pela URI. Capas vão para `filesDir/covers/{id}.jpg` (PDF: página 1 renderizada; EPUB: `publication.cover()`). Remover um livro libera a permissão e apaga a capa, **nunca** o arquivo do usuário.
 
@@ -73,7 +86,7 @@ Tema **escuro único** (fundo `Night`). Princípio (adaptado da skill *taste*): 
 |---|---|---|
 | `Purple` | `#7F1DF3` | barras superiores, bloco "Lendo agora", preenchimento do progresso sobre papel |
 | `PurpleDeep` | `#5712AD` | identidade de coleção / capas sem imagem |
-| `Lime` | `#92F728` | ação principal (FAB, "Continuar"), marca `YachayMark`, livro concluído, progresso sobre roxo |
+| `Lime` | `#92F728` | ação principal (FAB, "Continuar"), livro concluído, progresso sobre roxo |
 | `Lilac` | `#EBB3EA` | identidade de coleção / capas sem imagem, estado vazio de Coleções |
 | `Night` | `#1E0A3C` | **fundo de todas as telas** (e do leitor de PDF) |
 | `Cream` | `#F5E5D2` | cards/plaquinhas (linhas de coleção, diálogos, sheet, snackbar); texto sobre Night e roxos |
@@ -86,7 +99,7 @@ Tema **escuro único** (fundo `Night`). Princípio (adaptado da skill *taste*): 
 Barras do sistema com ícones claros nas duas (topo roxo, fundo Night) — `YachayStatusBar` / `YachayNavigationBar` em `MainActivity.kt`.
 
 Regras:
-- **Use sempre os componentes `Neo*`** (`NeoSurface`, `NeoPressable`, `NeoButton`, `NeoIconButton`, `NeoFab`, `NeoChip`, `NeoProgressBar`, `NeoTopBar`, `NeoTextField`, `NeoDialog`, `NeoEmptyState`, `NeoSnackbarHost`, `SectionHeader`, `YachayMark`). Nada de Material cru com elevação/ripple.
+- **Use sempre os componentes `Neo*`** (`NeoSurface`, `NeoPressable`, `NeoButton`, `NeoIconButton`, `NeoFab`, `NeoChip`, `NeoProgressBar`, `NeoTopBar`, `NeoTextField`, `NeoDialog`, `NeoEmptyState`, `NeoSnackbarHost`, `SectionHeader`). Nada de Material cru com elevação/ripple.
 - Contorno `Ink` de 2.5dp, cantos de 4dp, sombra dura deslocada (4dp; 5-6dp nos objetos principais) sem blur. Clicáveis "afundam" sobre a sombra (`NeoPressable`).
 - **As capas são os objetos**: na estante, a capa leva contorno + sombra e o texto fica solto embaixo, sem cartão (`BookCard`). Coleções mostram as capas em leque (`CoverFan`) sobre a cor da coleção.
 - Cada tela responde uma pergunta com o maior elemento. Biblioteca: "onde eu parei?" → `ReadingNowCard` ("Página 13 de 30 · faltam 17", toque único para continuar).
@@ -138,7 +151,7 @@ Terceira aba, **Ajustes** (`ui/settings/SettingsScreen.kt`, rota `SettingsRoute`
 4. Regra de progresso em `ReadingProgress` + teste em `app/src/test`.
 
 ## Testes
-- Unitários (JVM) em `app/src/test`: `BookFormatTest`, `ReadingProgressTest`, `ReaderPreferencesTest`, `EpubPreferencesMappingTest`, `SettingsRepositoryTest` (DataStore em `TemporaryFolder`).
+- Unitários (JVM) em `app/src/test`: `DailyGoalTest`, `DailyGoalRepositoryTest`, `ReaderLevelTest`, `BookFormatTest`, `ReadingProgressTest`, `ReaderPreferencesTest`, `EpubPreferencesMappingTest`, `SettingsRepositoryTest` (DataStore em `TemporaryFolder`).
 - `unitTests.isReturnDefaultValues = true`: enums do Readium (ex.: `Theme`) tocam APIs do Android ao carregar.
 - Não há testes instrumentados ainda; validação de UI/leitores é manual em dispositivo (importar PDF e EPUB, ler, voltar, conferir %, reabrir o app e checar retomada; criar/renomear/excluir coleção, filtrar).
 

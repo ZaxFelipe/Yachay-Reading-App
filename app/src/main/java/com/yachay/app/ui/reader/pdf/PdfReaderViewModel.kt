@@ -6,7 +6,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yachay.app.AppContainer
 import com.yachay.app.data.db.BookEntity
+import com.yachay.app.domain.DailyGoal
+import com.yachay.app.domain.DailyGoalProgress
 import com.yachay.app.domain.ReadingProgress
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,6 +34,21 @@ class PdfReaderViewModel(
 ) : ViewModel() {
 
     private val repository = container.bookRepository
+    private val dailyGoal = container.dailyGoal
+
+    /** Meta do dia, para a sub-barra no topo. */
+    val goal: StateFlow<DailyGoalProgress> = dailyGoal.progress
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DailyGoalProgress(0))
+
+    private val _goalNotice = MutableStateFlow(false)
+
+    /** true por alguns segundos quando a meta passa de 60% ou é batida. */
+    val goalNotice: StateFlow<Boolean> = _goalNotice.asStateFlow()
+
+    private val _unlockedLevel = MutableStateFlow<Int?>(null)
+
+    /** Nível desbloqueado pela meta do último aviso (fica após sumir, para a animação de saída). */
+    val unlockedLevel: StateFlow<Int?> = _unlockedLevel.asStateFlow()
 
     private val _state = MutableStateFlow<PdfReaderState>(PdfReaderState.Loading)
     val state: StateFlow<PdfReaderState> = _state.asStateFlow()
@@ -56,6 +76,21 @@ class PdfReaderViewModel(
             // drop(1): não regrava a posição inicial só por abrir o livro.
             _currentPage.drop(1).debounce(SAVE_DEBOUNCE_MS).collect(::save)
         }
+        viewModelScope.launch {
+            // Página conta para a meta só depois de alguns segundos nela (folhear não conta).
+            _currentPage.debounce(DailyGoal.PAGE_DWELL_MS).collect { page ->
+                if (_state.value !is PdfReaderState.Ready) return@collect
+                val recorded = dailyGoal.recordPage(bookId, DailyGoal.pdfPage(page))
+                if (recorded.shouldNotify) showGoalNotice(recorded.unlockedLevel)
+            }
+        }
+    }
+
+    private fun showGoalNotice(unlockedLevel: Int?) = viewModelScope.launch {
+        _unlockedLevel.value = unlockedLevel
+        _goalNotice.value = true
+        delay(NOTICE_MS)
+        _goalNotice.value = false
     }
 
     fun onPageVisible(index: Int) {
@@ -79,5 +114,6 @@ class PdfReaderViewModel(
 
     private companion object {
         const val SAVE_DEBOUNCE_MS = 400L
+        const val NOTICE_MS = 3_000L
     }
 }

@@ -37,6 +37,7 @@ import coil.compose.AsyncImage
 import com.yachay.app.R
 import com.yachay.app.data.db.BookEntity
 import com.yachay.app.domain.BookFormat
+import com.yachay.app.domain.DailyGoalProgress
 import com.yachay.app.domain.ReadingProgress
 import com.yachay.app.ui.theme.Lime
 import com.yachay.app.ui.theme.Purple
@@ -265,6 +266,7 @@ private fun lastOpenedLabel(book: BookEntity): String? {
 @Composable
 fun ReadingNowCard(
     book: BookEntity,
+    goal: DailyGoalProgress,
     onContinue: () -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -310,7 +312,7 @@ fun ReadingNowCard(
                     style = MaterialTheme.typography.labelLarge.tabular(),
                 )
                 Spacer(Modifier.height(6.dp))
-                NeoProgressBar(progress = book.progress, height = 14.dp, fillColor = Lime, showLabel = false)
+                NeoProgressBar(progress = book.progress, height = 14.dp, fillColor = Lime, showLabel = false, goal = goal)
                 lastOpenedLabel(book)?.let {
                     Spacer(Modifier.height(6.dp))
                     Text(it, style = MaterialTheme.typography.bodySmall, color = OnPurpleMuted)

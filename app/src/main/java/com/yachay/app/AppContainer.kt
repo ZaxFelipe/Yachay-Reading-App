@@ -2,6 +2,8 @@ package com.yachay.app
 
 import android.content.Context
 import com.yachay.app.data.db.YachayDatabase
+import com.yachay.app.data.goals.DailyGoalRepository
+import com.yachay.app.data.goals.dailyGoalStore
 import com.yachay.app.data.importer.BookImporter
 import com.yachay.app.data.importer.CoverStore
 import com.yachay.app.data.importer.ReadiumServices
@@ -33,6 +35,8 @@ class AppContainer(context: Context) {
     val bookImporter = BookImporter(context, database.bookDao(), coverStore, readium)
 
     val settings = SettingsRepository(context.settingsStore)
+
+    val dailyGoal = DailyGoalRepository(context.dailyGoalStore)
 
     val epubSessions = EpubSessions(readium, settings)
 }
