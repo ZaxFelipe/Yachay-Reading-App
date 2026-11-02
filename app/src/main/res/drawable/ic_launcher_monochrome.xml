@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Silhueta do livro aberto: usada só como ícone monocromático (ícones temáticos do Android 13+). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- sombra -->
+    <path
+        android:fillColor="#0D0517"
+        android:pathData="M33,39 L57,43 L81,39 L81,77 L57,81 L33,77 Z" />
+    <!-- página esquerda -->
+    <path
+        android:fillColor="#92F728"
+        android:strokeColor="#0D0517"
+        android:strokeWidth="3"
+        android:strokeLineJoin="round"
+        android:pathData="M29,35 L53,39 L53,77 L29,73 Z" />
+    <!-- página direita -->
+    <path
+        android:fillColor="#F5E5D2"
+        android:strokeColor="#0D0517"
+        android:strokeWidth="3"
+        android:strokeLineJoin="round"
+        android:pathData="M53,39 L77,35 L77,73 L53,77 Z" />
+    <!-- linhas de texto -->
+    <path
+        android:strokeColor="#0D0517"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M34,46 L47,48 M34,54 L47,56 M59,48 L72,46 M59,56 L72,54" />
+</vector>

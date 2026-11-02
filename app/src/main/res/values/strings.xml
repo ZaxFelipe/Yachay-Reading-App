@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Yachay</string>
+
+    <!-- Navegação -->
+    <string name="nav_library">Biblioteca</string>
+    <string name="nav_collections">Coleções</string>
+    <string name="nav_settings">Ajustes</string>
+    <string name="action_back">Voltar</string>
+    <string name="action_more">Mais opções</string>
+    <string name="action_cancel">Cancelar</string>
+    <string name="action_save">Salvar</string>
+    <string name="action_create">Criar</string>
+    <string name="action_delete">Excluir</string>
+    <string name="action_rename">Renomear</string>
+
+    <!-- Biblioteca -->
+    <string name="library_add_books">Adicionar livros</string>
+    <string name="library_filter_all">Todos</string>
+    <string name="library_reading_now">Lendo agora</string>
+    <string name="library_also_reading">Também em andamento</string>
+    <string name="library_continue">Continuar</string>
+    <string name="library_all_books">Todos os livros</string>
+    <plurals name="summary_books">
+        <item quantity="one">%d livro</item>
+        <item quantity="other">%d livros</item>
+    </plurals>
+    <string name="summary_no_books">Nenhum livro ainda</string>
+    <string name="summary_reading">%d em andamento</string>
+    <plurals name="summary_done">
+        <item quantity="one">%d lido</item>
+        <item quantity="other">%d lidos</item>
+    </plurals>
+    <string name="library_empty_title">Sua estante está vazia</string>
+    <string name="library_empty_body">Toque em + para adicionar PDFs e EPUBs do seu dispositivo.</string>
+    <string name="library_collection_empty">Nenhum livro nesta coleção ainda.</string>
+    <string name="library_importing">Importando…</string>
+    <plurals name="import_added">
+        <item quantity="one">%d livro adicionado</item>
+        <item quantity="other">%d livros adicionados</item>
+    </plurals>
+    <plurals name="import_duplicates">
+        <item quantity="one">%d já estava na biblioteca</item>
+        <item quantity="other">%d já estavam na biblioteca</item>
+    </plurals>
+    <plurals name="import_failed">
+        <item quantity="one">%d arquivo não pôde ser lido</item>
+        <item quantity="other">%d arquivos não puderam ser lidos</item>
+    </plurals>
+    <string name="import_nothing">Nenhum arquivo selecionado</string>
+
+    <!-- Livro -->
+    <string name="book_unknown_author">Autor desconhecido</string>
+    <string name="book_progress_done">Lido</string>
+    <string name="book_badge_done">Lido!</string>
+    <string name="book_meta_new">Novo · %s</string>
+    <string name="book_meta_pages">%1$s · %2$d págs</string>
+    <string name="book_position_pdf">Página %1$d de %2$d · faltam %3$d</string>
+    <string name="book_position_pdf_last">Página %1$d de %2$d</string>
+    <string name="book_position_percent">%d%% lido</string>
+    <string name="book_last_opened">Aberto %s</string>
+    <string name="book_actions_collections">Coleções</string>
+    <string name="book_actions_new_collection">Nova coleção</string>
+    <string name="book_actions_remove">Remover da biblioteca</string>
+    <string name="book_remove_confirm_title">Remover livro?</string>
+    <string name="book_remove_confirm_body">\"%s\" sai da biblioteca e de todas as coleções. O arquivo no dispositivo não é apagado.</string>
+    <string name="book_open_failed">Não foi possível abrir este livro. O arquivo pode ter sido movido ou apagado.</string>
+
+    <!-- Coleções -->
+    <string name="collections_empty_title">Nenhuma coleção</string>
+    <string name="collections_empty_body">Crie coleções para agrupar seus livros por tema, autor ou humor.</string>
+    <string name="collections_new">Nova coleção</string>
+    <string name="collections_name_hint">Nome da coleção</string>
+    <string name="collections_rename_title">Renomear coleção</string>
+    <string name="collections_delete_title">Excluir coleção?</string>
+    <string name="collections_delete_body">A coleção \"%s\" será excluída. Os livros continuam na biblioteca.</string>
+    <string name="collection_detail_empty">Segure um livro na biblioteca e marque esta coleção para adicioná-lo aqui.</string>
+    <!-- Em pt-BR o Android trata 0 como "one" ("0 livro"), por isso o zero tem string própria. -->
+    <string name="collections_book_count_zero">Vazia</string>
+    <plurals name="collections_count">
+        <item quantity="one">%d coleção</item>
+        <item quantity="other">%d coleções</item>
+    </plurals>
+    <plurals name="collections_book_count">
+        <item quantity="one">%d livro</item>
+        <item quantity="other">%d livros</item>
+    </plurals>
+
+    <!-- Ajustes -->
+    <string name="settings_title">Ajustes</string>
+    <string name="app_version">Yachay %s</string>
+    <string name="settings_reading_theme">Tema de leitura</string>
+    <string name="settings_reading_theme_body">Cor das páginas nos leitores de PDF e EPUB. O resto do app continua igual.</string>
+    <string name="theme_paper">Papel</string>
+    <string name="theme_paper_desc">Página creme, texto em tinta. Para ler de dia.</string>
+    <string name="theme_night">Noturno</string>
+    <string name="theme_night_desc">Página roxo-noite, texto creme. Cansa menos a vista no escuro.</string>
+    <string name="settings_sample_text">Capitu tinha olhos de cigana oblíqua e dissimulada.</string>
+
+    <!-- Leitor -->
+    <string name="reader_loading">Abrindo livro…</string>
+    <string name="reader_error_title">Ops!</string>
+    <string name="reader_page_of">%1$d / %2$d</string>
+</resources>

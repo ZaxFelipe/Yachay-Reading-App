@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Espelho de ui/theme/Color.kt para uso em XML (ícone, temas de janela). -->
+    <color name="yachay_purple">#7F1DF3</color>
+    <color name="yachay_purple_deep">#5712AD</color>
+    <color name="yachay_lime">#92F728</color>
+    <color name="yachay_night">#1E0A3C</color>
+    <color name="yachay_cream">#F5E5D2</color>
+    <color name="yachay_ink">#0D0517</color>
+</resources>

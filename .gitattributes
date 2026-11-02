@@ -1,0 +1,6 @@
+# Normaliza texto como LF no repositório; o gradlew precisa de LF para rodar em Linux/macOS/CI.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.jar binary
+*.png binary
+*.ttf binary

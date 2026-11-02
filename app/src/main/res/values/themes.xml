@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- O visual real vem do Compose (ui/theme); estes temas só cuidam da janela. -->
+    <style name="Theme.Yachay" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/yachay_night</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <!-- O navegador EPUB do Readium é baseado em Fragment/AppCompat. -->
+    <style name="Theme.Yachay.Reader" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">@color/yachay_night</item>
+        <item name="colorPrimary">@color/yachay_purple</item>
+        <item name="colorAccent">@color/yachay_lime</item>
+    </style>
+</resources>
