@@ -17,3 +17,6 @@
 keystore.properties
 *.jks
 *.keystore
+
+# Tarefas locais de planejamento (não versionadas)
+/tasks/
